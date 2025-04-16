@@ -1,0 +1,195 @@
+'use client';
+
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Layers, Tag, ShoppingBag, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useCategories } from '@/lib/contexts/categories-context';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useEffect } from 'react';
+
+export function CategorySidebar() {
+	const router = useRouter();
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const { categories, isLoading, error, reload } = useCategories();
+
+	const currentCategory = searchParams.get('category');
+
+	// Log para debug
+	useEffect(() => {
+		console.log('[Sidebar] Estado das categorias:', {
+			categoriesCount: categories.length,
+			isLoading,
+			error,
+			firstCategories: categories
+				.slice(0, 3)
+				.map((c) => ({ id: c.id, name: c.name, itemQuantity: c.itemQuantity })),
+		});
+	}, [categories, isLoading, error]);
+
+	const handleCategoryClick = (categoryId: string) => {
+		const params = new URLSearchParams(searchParams);
+		if (categoryId === 'all') {
+			params.delete('category');
+		} else {
+			params.set('category', categoryId);
+		}
+		router.push(`${pathname}?${params.toString()}`);
+	};
+
+	// Ordenar categorias por nome (exceto "Todos os produtos" que fica sempre no topo)
+	const sortedCategories = [...categories].sort((a, b) => {
+		// "Todos os produtos" sempre primeiro
+		if (a.id === 'all') return -1;
+		if (b.id === 'all') return 1;
+
+		// As demais categorias em ordem alfabética
+		return a.name.localeCompare(b.name, 'pt-BR');
+	});
+
+	if (isLoading) {
+		return (
+			<div className="p-4 space-y-4">
+				<Skeleton className="h-6 w-3/4" />
+				<div className="space-y-2">
+					{Array.from({ length: 12 }).map((_, i) => (
+						<Skeleton key={i} className="h-10 w-full" />
+					))}
+				</div>
+			</div>
+		);
+	}
+
+	// Se houver erro, exibir mensagem para o usuário com opção de recarregar
+	if (error) {
+		return (
+			<div className="p-4 space-y-4">
+				<div className="flex items-center gap-2 mb-4">
+					<div className="h-9 w-9 rounded-full icon-brand-container flex items-center justify-center">
+						<ShoppingBag size={18} className="icon-brand" />
+					</div>
+					<h2 className="text-lg font-bold text-brand">Categorias</h2>
+				</div>
+				<div className="p-3 rounded-md bg-red-50 border border-red-100 text-red-800 text-sm">
+					<p className="mb-2">
+						Não foi possível carregar as categorias. Por favor, tente novamente.
+					</p>
+					<details className="mb-3 text-xs">
+						<summary>Detalhes do erro</summary>
+						<p className="mt-1 text-red-700">{error}</p>
+					</details>
+					<Button
+						variant="secondary"
+						size="sm"
+						onClick={() => reload()}
+						className="w-full mt-1 flex items-center justify-center gap-2"
+					>
+						<RefreshCw size={14} />
+						Tentar novamente
+					</Button>
+				</div>
+			</div>
+		);
+	}
+
+	// Se não houver categorias, exibir mensagem
+	if (categories.length === 0) {
+		return (
+			<div className="p-4 space-y-4">
+				<div className="flex items-center gap-2 mb-4">
+					<div className="h-9 w-9 rounded-full icon-brand-container flex items-center justify-center">
+						<ShoppingBag size={18} className="icon-brand" />
+					</div>
+					<h2 className="text-lg font-bold text-brand">Categorias</h2>
+				</div>
+				<div className="p-3 rounded-md bg-gray-50 border border-gray-100 text-gray-600 text-sm">
+					<p className="mb-2">Nenhuma categoria disponível no momento.</p>
+					<Button
+						variant="secondary"
+						size="sm"
+						onClick={() => reload()}
+						className="w-full mt-1 flex items-center justify-center gap-2"
+					>
+						<RefreshCw size={14} />
+						Tentar novamente
+					</Button>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<aside className="h-full bg-white p-6 overflow-hidden flex flex-col">
+			<div className="flex items-center gap-2 mb-4">
+				<div className="h-9 w-9 rounded-full icon-brand-container flex items-center justify-center">
+					<ShoppingBag size={18} className="icon-brand" />
+				</div>
+				<h2 className="text-lg font-bold text-brand">Categorias</h2>
+			</div>
+
+			<ScrollArea className="flex-1 pr-2">
+				<nav className="space-y-1 mb-4">
+					{sortedCategories.map((category) => (
+						<button
+							key={category.id}
+							onClick={() => handleCategoryClick(category.id)}
+							className={cn(
+								'w-full text-left px-4 py-3 rounded-lg transition-all flex items-center gap-3 group',
+								currentCategory === category.id ||
+									(!currentCategory && category.id === 'all')
+									? 'bg-brand-light text-brand-solid font-medium shadow-sm'
+									: 'text-gray-600 hover:bg-gray-50'
+							)}
+						>
+							{currentCategory === category.id ||
+							(!currentCategory && category.id === 'all') ? (
+								<Tag size={16} className="icon-brand" />
+							) : (
+								<Layers
+									size={16}
+									className="text-gray-400 group-hover:text-gray-600 transition-colors"
+								/>
+							)}
+							<span
+								className={cn(
+									'transition-all',
+									(currentCategory === category.id ||
+										(!currentCategory && category.id === 'all')) &&
+										'translate-x-1'
+								)}
+							>
+								{category.name}
+							</span>
+							{category.id !== 'all' && category.itemQuantity !== undefined && (
+								<Badge
+									variant="outline"
+									className={cn(
+										'ml-auto text-xs',
+										currentCategory === category.id
+											? 'bg-brand-light border-brand'
+											: 'bg-gray-50 border-gray-200 text-gray-500'
+									)}
+								>
+									{category.itemQuantity}
+								</Badge>
+							)}
+						</button>
+					))}
+				</nav>
+
+				{/* Elemento decorativo - agora dentro do ScrollArea, logo após as categorias */}
+				<div className="rounded-lg bg-brand-light p-4 border border-gray-100 mb-6">
+					<p className="text-sm font-medium text-gray-600 mb-1">
+						Nossa seleção exclusiva
+					</p>
+					<p className="text-xs text-gray-500">
+						Produtos selecionados especialmente para você.
+					</p>
+				</div>
+			</ScrollArea>
+		</aside>
+	);
+}
