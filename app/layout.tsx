@@ -21,6 +21,16 @@ export const metadata: Metadata = {
 	description:
 		'Acesse sua loja personalizada True Store e descubra produtos exclusivos para você.',
 	generator: 'True Source',
+	robots: {
+		index: false,
+		follow: false,
+		nocache: true,
+		googleBot: {
+			index: false,
+			follow: false,
+			noimageindex: true,
+		},
+	},
 	icons: {
 		icon: '/logo-true.svg',
 		shortcut: '/logo-true.svg',
@@ -42,6 +52,8 @@ export default function RootLayout({
 			<html lang="pt-BR" suppressHydrationWarning>
 				<head>
 					<link rel="icon" href="/logo-true.svg" />
+					<meta name="robots" content="noindex, nofollow" />
+					<meta name="googlebot" content="noindex, nofollow, noarchive" />
 				</head>
 				<body
 					className={`min-h-screen bg-background font-sans antialiased ${inter.variable}`}
