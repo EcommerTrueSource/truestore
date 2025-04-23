@@ -3,6 +3,8 @@ import { TrueCore } from '@/lib/true-core-proxy';
 
 /**
  * Extrai o token de forma mais simplificada, seguindo o padrão da rota de produtos
+ * 
+ * @deprecated Recomenda-se usar TrueCore.extractToken para padronização
  */
 function extractToken(request: NextRequest): string | null {
   // Extrair token apenas do cookie
@@ -25,7 +27,11 @@ function extractToken(request: NextRequest): string | null {
 }
 
 /**
- * Rota proxy para categorias de produtos no True Core
+ * Rota proxy principal para categorias de produtos no True Core
+ * 
+ * Esta é a implementação de referência para obtenção de categorias.
+ * É chamada indiretamente através do ponto de entrada unificado /api/categories
+ * 
  * GET /api/marketing/products/categories
  */
 export async function GET(request: NextRequest) {

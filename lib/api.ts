@@ -7,202 +7,6 @@ import { ApiService } from "./services/api-service"
 import { useApi } from '@/hooks/use-api';
 import { tokenStore } from './token-store';
 
-// Mock data for products (fallback)
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    name: "Base Líquida Ultra HD",
-    description: "Base de alta cobertura e acabamento natural.",
-    price: 89.90,
-    originalPrice: 119.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "1",
-    codigo: "1001",
-    unidade: "UN"
-  },
-  {
-    id: "2",
-    name: "Sérum Facial Vitamina C",
-    description: "Sérum concentrado para luminosidade da pele.",
-    price: 129.90,
-    originalPrice: 159.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "2",
-    codigo: "1002",
-    unidade: "UN"
-  },
-  {
-    id: "3",
-    name: "Máscara para Cílios Volume",
-    description: "Máscara que proporciona volume intenso aos cílios.",
-    price: 69.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "1",
-    codigo: "1003",
-    unidade: "UN"
-  },
-  {
-    id: "4",
-    name: "Shampoo Hidratante",
-    description: "Shampoo nutritivo para cabelos secos.",
-    price: 59.90,
-    originalPrice: 79.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "3",
-    codigo: "1004",
-    unidade: "ML"
-  },
-  {
-    id: "5",
-    name: "Hidratante Corporal",
-    description: "Loção hidratante para corpo com rápida absorção.",
-    price: 49.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "4",
-    codigo: "1005",
-    unidade: "ML"
-  },
-  {
-    id: "6",
-    name: "Perfume Floral Intenso",
-    description: "Fragrância feminina com notas florais.",
-    price: 199.90,
-    originalPrice: 249.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "5",
-    codigo: "1006",
-    unidade: "ML"
-  },
-  {
-    id: "7",
-    name: "Colágeno em Pó",
-    description: "Suplemento de colágeno para pele, cabelos e unhas.",
-    price: 89.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "6",
-    codigo: "1007",
-    unidade: "G"
-  },
-  {
-    id: "8",
-    name: "Kit Pincéis Maquiagem",
-    description: "Kit com 12 pincéis essenciais para maquiagem.",
-    price: 149.90,
-    originalPrice: 199.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "7",
-    codigo: "1008",
-    unidade: "KIT"
-  },
-  {
-    id: "9",
-    name: "Protetor Solar FPS 50",
-    description: "Protetor solar de alta proteção, toque seco.",
-    price: 79.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "2",
-    codigo: "1009",
-    unidade: "ML"
-  },
-  {
-    id: "10",
-    name: "Batom Matte Longa Duração",
-    description: "Batom de alta pigmentação e efeito matte.",
-    price: 39.90,
-    originalPrice: 59.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "1",
-    codigo: "1010",
-    unidade: "UN"
-  },
-  {
-    id: "11",
-    name: "Máscara Capilar Reparadora",
-    description: "Tratamento intensivo para cabelos danificados.",
-    price: 69.90,
-    originalPrice: 89.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "3",
-    codigo: "1011",
-    unidade: "G"
-  },
-  {
-    id: "12",
-    name: "Óleo Corporal Hidratante",
-    description: "Óleo corporal com fragrância suave para pele macia.",
-    price: 59.90,
-    imageUrl: "/placeholder.svg?height=300&width=300",
-    categoryId: "4",
-    codigo: "1012",
-    unidade: "ML"
-  }
-]
-
-// Mock data for categories (fallback)
-const mockCategories: Category[] = [
-  {
-    id: "all",
-    name: "Todos os produtos",
-    slug: "todos"
-  },
-  {
-    id: "1",
-    name: "Maquiagem",
-    slug: "maquiagem"
-  },
-  {
-    id: "2",
-    name: "Skincare",
-    slug: "skincare"
-  },
-  {
-    id: "3",
-    name: "Cabelo",
-    slug: "cabelo"
-  },
-  {
-    id: "4",
-    name: "Corpo & Banho",
-    slug: "corpo-banho"
-  },
-  {
-    id: "5",
-    name: "Fragrâncias",
-    slug: "fragrancias"
-  },
-  {
-    id: "6",
-    name: "Suplementos",
-    slug: "suplementos"
-  },
-  {
-    id: "7",
-    name: "Acessórios",
-    slug: "acessorios"
-  },
-]
-
-// Mock data for cart items (fallback)
-const mockCartItems: CartItem[] = [
-  {
-    id: "1",
-    name: "Base Líquida Ultra HD",
-    price: 89.90,
-    quantity: 1,
-    imageUrl: "/placeholder.svg?height=100&width=100",
-    codigo: "1001",
-    unidade: "UN"
-  },
-  {
-    id: "4",
-    name: "Shampoo Hidratante",
-    price: 59.90,
-    quantity: 2,
-    imageUrl: "/placeholder.svg?height=100&width=100",
-    codigo: "1004",
-    unidade: "ML"
-  },
-]
 
 // Flag para usar API real ou dados mockados - sempre verdadeiro
 const USE_REAL_API = true; // Sempre usar a API real
@@ -244,7 +48,7 @@ export async function fetchProducts({
       }
     } else {
       // Armazenar o token fornecido no TokenStore global para uso futuro
-      tokenStore.setToken(token);
+      tokenStore.setToken(token, 86400);
       console.log('[API] Token fornecido foi armazenado no TokenStore global');
     }
     
@@ -391,8 +195,13 @@ export async function fetchProducts({
     
     // A API real retorna um objeto com propriedade 'data' que contém o array de produtos
     if (responseData && typeof responseData === 'object' && 'data' in responseData && Array.isArray(responseData.data)) {
+      // Filtrar apenas produtos ativos (active: true)
+      const activeProducts = responseData.data.filter((item: any) => item.active === true);
+      
+      console.log(`[API] Filtrados ${activeProducts.length} produtos ativos de um total de ${responseData.data.length}`);
+      
       // Mapear os produtos da API para o formato esperado pelo nosso app
-      products = responseData.data.map((item: any) => ({
+      products = activeProducts.map((item: any) => ({
         // Usar o SKU como ID, ou tinyId como fallback, ou o ID original como último recurso
         id: item.sku || item.tinyId || item.id,
         name: item.name,
@@ -404,10 +213,12 @@ export async function fetchProducts({
         // Incluir o objeto de categoria se disponível na resposta
         category: item.category || undefined,
         codigo: item.sku,
-        unidade: item.attributes?.unidade || 'UN'
+        unidade: item.attributes?.unidade || 'UN',
+        // Preservar a propriedade active
+        active: item.active
       }));
       
-      console.log(`[API] Processados ${products.length} produtos da API`);
+      console.log(`[API] Processados ${products.length} produtos ativos da API`);
     } else {
       console.error('[API] Formato inesperado na resposta da API de produtos:', responseData);
       throw new Error('Formato inesperado na resposta da API');
@@ -445,7 +256,7 @@ export async function fetchCategories(jwtToken?: string): Promise<Category[]> {
             console.log('[API] Token extraído do cookie para categorias');
             
             // Armazenar para uso futuro
-            tokenStore.setToken(token);
+            tokenStore.setToken(token, 86400);
           }
         } catch (e) {
           console.error('[API] Erro ao verificar cookies:', e);
@@ -460,7 +271,7 @@ export async function fetchCategories(jwtToken?: string): Promise<Category[]> {
       }
     } else {
       // Armazenar o token fornecido no TokenStore global para uso futuro
-      tokenStore.setToken(token);
+      tokenStore.setToken(token, 86400);
       console.log('[API] Token fornecido foi armazenado no TokenStore global (fetchCategories)');
     }
     
@@ -634,6 +445,248 @@ export async function fetchCartItems(jwtToken?: string): Promise<CartItem[]> {
     return items;
   } catch (error) {
     console.error('Erro ao buscar itens do carrinho:', error);
+    throw error; // Propagar o erro para ser tratado pelo componente
+  }
+}
+
+/**
+ * Busca produtos usando a API avançada de busca
+ */
+export async function searchProducts({
+  query,
+  categoryId,
+  categoryName,
+  categoryItemCount,
+  sortBy = "name-asc",
+  page = 1,
+  limit = 20,
+  minPrice,
+  maxPrice,
+  jwtToken,
+  searchQuery
+}: {
+  query?: string;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  categoryItemCount?: number;
+  sortBy?: string;
+  page?: number;
+  limit?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  jwtToken?: string;
+  searchQuery?: string;
+}): Promise<Product[]> {
+  try {
+    // Verificar se temos um token JWT
+    let token = jwtToken;
+    
+    // Se não foi fornecido, tentar obter do TokenStore global
+    if (!token) {
+      const storeToken = tokenStore.getToken();
+      if (!storeToken) {
+        console.error('[API] Token não fornecido e não encontrado no TokenStore');
+        throw new Error('Token de autenticação necessário');
+      } else {
+        token = storeToken;
+        console.log('[API] Usando token do TokenStore global para searchProducts');
+      }
+    } else {
+      // Armazenar o token fornecido no TokenStore global para uso futuro
+      tokenStore.setToken(token, 86400);
+      console.log('[API] Token fornecido foi armazenado no TokenStore global');
+    }
+    
+    // Preparar parâmetros para a busca
+    const params: Record<string, string> = {
+      page: page.toString()
+    };
+    
+    // Ajustar o limite baseado no número de itens na categoria e a paginação
+    let adjustedLimit = limit;
+    let adjustedPage = page;
+
+    if (categoryId && categoryId !== 'all' && categoryName) {
+      // Se temos uma categoria específica selecionada, vamos buscar mais produtos
+      // Limite fixo de 100 produtos por requisição para categorias
+      adjustedLimit = 100;
+      
+      // Se estamos na página > 1, ajustamos os parâmetros para buscar o próximo conjunto de dados
+      if (page > 1) {
+        // A API usa paginação baseada em 0, então ajustamos para obter o conjunto correto
+        adjustedPage = page - 1;
+        console.log(`[API] Buscando página ${adjustedPage} da categoria com limite de ${adjustedLimit}`);
+      } else {
+        console.log('[API] Primeira página de categoria com limite de 100 produtos');
+      }
+    } else if (categoryItemCount && categoryItemCount > 0) {
+      console.log(`[API] Ajustando limite para o número de itens na categoria: ${categoryItemCount}`);
+      // Se estamos na primeira página, usamos o total de itens se for menor que PRODUCTS_PER_PAGE
+      if (page === 1 && categoryItemCount < limit) {
+        adjustedLimit = categoryItemCount;
+      } else if (categoryItemCount > 12) {
+        // Se temos mais de 12 itens, mantemos o limite original para paginação
+        adjustedLimit = limit;
+      } else {
+        // Para categorias com poucos itens, buscamos todos de uma vez
+        adjustedLimit = categoryItemCount;
+      }
+    }
+
+    // Definir o limite ajustado e a página
+    params.limit = adjustedLimit.toString();
+    params.page = adjustedPage.toString();
+    
+    // Adicionar query de busca se fornecida
+    if (query) {
+      params.query = query;
+    }
+    
+    // Adicionar termo de busca para a API (usado com o input de busca)
+    if (searchQuery) {
+      params.search = searchQuery;
+    }
+    
+    // Adicionar ID da categoria se fornecida e não for 'all'
+    if (categoryId && categoryId !== 'all') {
+      params.categoryId = categoryId;
+      
+      // Sempre enviar nome da categoria se estiver disponível
+      // para filtro preciso na API
+      if (categoryName) {
+        params.categoryName = categoryName;
+        console.log(`[API] Filtrando pela categoria: ${categoryName}`);
+      }
+    }
+    
+    // Ordenação
+    if (sortBy) {
+      params.sortBy = sortBy;
+    }
+    
+    // Filtros de preço
+    if (minPrice !== undefined && minPrice > 0) {
+      params.minPrice = minPrice.toString();
+    }
+    
+    if (maxPrice !== undefined && maxPrice > 0) {
+      params.maxPrice = maxPrice.toString();
+    }
+    
+    // Construir string de consulta
+    const queryString = new URLSearchParams(params).toString();
+    
+    // Construir um endpoint seguro - em caso de falha da API de busca, temos um fallback
+    let endpoint;
+    let useFallback = false;
+    
+    // Primeiro tentar usar o endpoint de busca avançada
+    endpoint = `/api/marketing/products/search${queryString ? `?${queryString}` : ''}`;
+    
+    console.log(`[API] Buscando produtos com busca avançada: ${endpoint}`);
+    
+    // Enviar o token como cookie para garantir que esteja disponível para a API
+    document.cookie = `true_core_token=${token}; path=/; max-age=3600`;
+    
+    // Fazer a requisição
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        cache: 'no-store',
+        credentials: 'include' // Importante para incluir cookies
+      });
+      
+      // Se ocorrer erro 400 (Bad Request), provavelmente há incompatibilidade com os parâmetros
+      // Vamos tentar com o endpoint padrão de produtos
+      if (response.status === 400) {
+        console.log('[API] Erro 400 na API de busca avançada, tentando endpoint padrão...');
+        useFallback = true;
+      } else if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        if (response.status === 401) {
+          console.error('[API] Token expirado ou inválido');
+          tokenStore.clearToken();
+          throw new Error('UNAUTHORIZED');
+        }
+        
+        throw new Error(errorData.error || `Erro ao buscar produtos: ${response.status}`);
+      }
+    } catch (fetchError: any) {
+      if (useFallback || fetchError.message !== 'UNAUTHORIZED') {
+        // Se não for erro de autenticação ou se já temos um flag para fallback, tentar endpoint padrão
+        console.log('[API] Usando endpoint padrão de produtos como fallback');
+        endpoint = `/api/marketing/products${queryString ? `?${queryString}` : ''}`;
+        
+        response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          cache: 'no-store',
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          
+          if (response.status === 401) {
+            console.error('[API] Token expirado ou inválido no endpoint fallback');
+            tokenStore.clearToken();
+            throw new Error('UNAUTHORIZED');
+          }
+          
+          throw new Error(errorData.error || `Erro ao buscar produtos (fallback): ${response.status}`);
+        }
+      } else {
+        // Se for outro erro, propagar
+        throw fetchError;
+      }
+    }
+    
+    // Obter dados da resposta
+    const responseData = await response.json();
+    
+    // Processar a resposta - converter para formato esperado
+    let products: Product[] = [];
+    
+    // A API retorna um objeto com propriedade 'data' que contém o array de produtos
+    if (responseData && typeof responseData === 'object' && 'data' in responseData && Array.isArray(responseData.data)) {
+      // Filtrar apenas produtos ativos (active: true)
+      const activeProducts = responseData.data.filter((item: any) => item.active === true);
+      
+      console.log(`[API] Filtrados ${activeProducts.length} produtos ativos de um total de ${responseData.data.length}`);
+      
+      // Mapear os produtos da API para o formato esperado pelo nosso app
+      products = activeProducts.map((item: any) => ({
+        id: item.sku || item.tinyId || item.id,
+        name: item.name,
+        description: item.description || '',
+        price: parseFloat(item.price),
+        originalPrice: item.costPrice ? parseFloat(item.costPrice) : undefined,
+        imageUrl: item.images && item.images.length > 0 ? item.images[0] : '/placeholder.svg',
+        categoryId: item.categoryId || '',
+        category: item.category || undefined,
+        codigo: item.sku,
+        unidade: item.attributes?.unidade || 'UN',
+        active: item.active
+      }));
+      
+      console.log(`[API] Processados ${products.length} produtos ativos da busca avançada`);
+    } else {
+      console.error('[API] Formato inesperado na resposta da API de busca avançada:', responseData);
+      throw new Error('Formato inesperado na resposta da API');
+    }
+    
+    return products;
+  } catch (error) {
+    console.error('[API] Erro ao realizar busca avançada de produtos:', error);
     throw error; // Propagar o erro para ser tratado pelo componente
   }
 }

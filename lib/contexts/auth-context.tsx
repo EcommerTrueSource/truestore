@@ -14,6 +14,7 @@ import { useUser, useClerk, useAuth as useClerkAuth } from '@clerk/nextjs';
 import { authService, User } from '@/lib/services/auth-service';
 import { tokenStore } from '@/lib/token-store';
 import { setAuth } from '@/lib/api-helpers';
+import { LogOut } from 'lucide-react';
 
 export interface AuthContextType {
 	user: User | null;
@@ -24,6 +25,7 @@ export interface AuthContextType {
 	logout: () => Promise<void>;
 	getJwtToken: () => Promise<string | null>;
 	getApiToken: () => Promise<string | null>;
+	forceRefresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -35,6 +37,7 @@ const AuthContext = createContext<AuthContextType>({
 	logout: async () => {},
 	getJwtToken: async () => null,
 	getApiToken: async () => null,
+	forceRefresh: async () => {},
 });
 
 /**
@@ -85,7 +88,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 				const localToken = await authService.getApiToken();
 				if (localToken) {
 					// Migrar para o TokenStore global
-					tokenStore.setToken(localToken);
+					tokenStore.setToken(localToken, 86400); // Convertido para número
 					console.log(
 						'[AUTH] Token migrado do localStorage para TokenStore global'
 					);
@@ -252,21 +255,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 			// Limpar tokens de todos os lugares
 			tokenStore.clearToken();
 			authService.clearApiToken();
-
 			stopTokenRenewalJob();
-			await signOut();
+
+			// Importante: primeiro definir o estado como não autenticado e limpar o usuário
+			setIsAuthenticated(false);
 			setUser(null);
-			router.push('/login');
-			toast.info('Logout realizado', {
+
+			// Mostrar toast de sucesso
+			toast.success('Logout realizado', {
 				description: 'Você foi desconectado com sucesso.',
+				duration: 3000,
 			});
+
+			// Aguardar um pequeno tempo para garantir que os estados sejam atualizados
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			// NOTA: O redirecionamento será feito pelo componente que chama esta função
+			// para garantir que não haja conflito de navegação
+
+			// Chamar signOut do Clerk por último, pois pode limpar a sessão
+			await signOut();
 		} catch (error) {
 			console.error('[AUTH] Erro ao fazer logout:', error);
+
+			// Mesmo com erro, garantir que o usuário não fique preso
+			setIsAuthenticated(false);
+			setUser(null);
+
 			toast.error('Erro ao fazer logout', {
-				description: 'Ocorreu um erro ao desconectar. Tente novamente.',
+				description: 'Ocorreu um erro, mas você foi desconectado.',
 			});
 		}
-	}, [router, signOut, stopTokenRenewalJob]);
+	}, [signOut, stopTokenRenewalJob]);
 
 	/**
 	 * Efeito para inicializar o estado de autenticação
@@ -353,56 +373,70 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 			// Dispara evento para informar que a autenticação está sendo inicializada
 			window.dispatchEvent(new CustomEvent('auth:initializing'));
 
+			// Verificar se estamos na página de login - não simular autenticação nessa página
+			const isLoginPage = window.location.pathname === '/login';
+
 			// Simulação de carga do Clerk para desenvolvimento
 			setTimeout(() => {
 				console.log('[AUTH] Simulando autenticação...');
 
-				// Simular usuário logado
-				setIsAuthenticated(true);
-				setUser({
-					id: 'user_2vmUHur9fIF1hSYQuipohb1eeGz',
-					firstName: 'Demo',
-					lastName: 'User',
-					username: 'demo',
-					emailAddresses: [
-						{
-							emailAddress: 'user_user_2vmUHur9fIF1hSYQuipohb1eeGz@example.com',
-						},
-					],
-				});
-
-				// Obter token do True Core como parte da inicialização
-				getApiToken()
-					.then((token) => {
-						console.log(
-							token
-								? '[AUTH] Token True Core obtido com sucesso'
-								: '[AUTH] Nenhum token True Core obtido durante inicialização'
-						);
-
-						// Sinalizar que a autenticação está completa
-						setIsLoading(false);
-						setIsReady(true);
-
-						// Disparar evento para que outros contextos saibam que a autenticação está pronta
-						window.dispatchEvent(
-							new CustomEvent('auth:ready', {
-								detail: { isAuthenticated: true },
-							})
-						);
-					})
-					.catch((err) => {
-						console.error('[AUTH] Erro ao obter token:', err);
-						setIsLoading(false);
-						setIsReady(true);
-
-						// Disparar evento mesmo em caso de falha
-						window.dispatchEvent(
-							new CustomEvent('auth:ready', {
-								detail: { isAuthenticated: true, hasError: true },
-							})
-						);
+				// Simular usuário logado apenas se não estivermos na página de login
+				if (!isLoginPage) {
+					setIsAuthenticated(true);
+					setUser({
+						id: 'user_2vmUHur9fIF1hSYQuipohb1eeGz',
+						name: 'Demo User',
+						email: 'user_user_2vmUHur9fIF1hSYQuipohb1eeGz@example.com',
+						role: 'user',
+						imageUrl: undefined,
 					});
+
+					// Obter token do True Core como parte da inicialização
+					getApiToken()
+						.then((token) => {
+							console.log(
+								token
+									? '[AUTH] Token True Core obtido com sucesso'
+									: '[AUTH] Nenhum token True Core obtido durante inicialização'
+							);
+
+							// Sinalizar que a autenticação está completa
+							setIsLoading(false);
+							setIsReady(true);
+
+							// Disparar evento para que outros contextos saibam que a autenticação está pronta
+							window.dispatchEvent(
+								new CustomEvent('auth:ready', {
+									detail: { isAuthenticated: true },
+								})
+							);
+						})
+						.catch((err) => {
+							console.error('[AUTH] Erro ao obter token:', err);
+							setIsLoading(false);
+							setIsReady(true);
+
+							// Disparar evento mesmo em caso de falha
+							window.dispatchEvent(
+								new CustomEvent('auth:ready', {
+									detail: { isAuthenticated: true, hasError: true },
+								})
+							);
+						});
+				} else {
+					// Na página de login, configurar como não autenticado
+					setIsAuthenticated(false);
+					setUser(null);
+					setIsLoading(false);
+					setIsReady(true);
+
+					// Disparar evento de autenticação pronta com isAuthenticated: false
+					window.dispatchEvent(
+						new CustomEvent('auth:ready', {
+							detail: { isAuthenticated: false },
+						})
+					);
+				}
 			}, 250);
 
 			// Job para verificação periódica de token
@@ -442,6 +476,47 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 		}
 	}, []);
 
+	/**
+	 * Forçar a atualização do estado de autenticação
+	 * Isso é útil quando sabemos que o token foi atualizado, mas o estado ainda não reflete isso
+	 */
+	const forceRefresh = useCallback(async (): Promise<void> => {
+		try {
+			console.log('[AUTH] Forçando atualização do estado de autenticação...');
+			setIsLoading(true);
+
+			// Verificar se há um token válido
+			const token = await getApiToken();
+
+			if (token) {
+				console.log('[AUTH] Token encontrado durante atualização forçada');
+				// Se há um token válido, considerar o usuário como autenticado
+				setIsAuthenticated(true);
+
+				// Se não temos dados do usuário, criar um usuário simulado
+				if (!user) {
+					setUser({
+						id: 'refresh_user',
+						name: 'Usuário Autenticado',
+						email: 'auth@example.com',
+						role: 'user',
+						imageUrl: undefined,
+					});
+				}
+			} else {
+				console.log(
+					'[AUTH] Nenhum token válido encontrado durante atualização forçada'
+				);
+				setIsAuthenticated(false);
+				setUser(null);
+			}
+		} catch (error) {
+			console.error('[AUTH] Erro ao forçar atualização:', error);
+		} finally {
+			setIsLoading(false);
+		}
+	}, [getApiToken, user]);
+
 	// Contexto de autenticação exposto
 	const authContextValue: AuthContextType = {
 		user,
@@ -452,6 +527,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 		logout,
 		getJwtToken,
 		getApiToken,
+		forceRefresh,
 	};
 
 	// Registrar métodos para uso global sem dependência circular
@@ -462,6 +538,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 			isAuthenticated: !!user,
 		});
 	}, [getJwtToken, getApiToken, user]);
+
+	// Adicionar um listener para o evento auth:login-complete
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+
+		// Handler para o evento de conclusão de login
+		const handleLoginComplete = async (event: Event) => {
+			const customEvent = event as CustomEvent;
+			console.log(
+				'[AUTH] Evento auth:login-complete recebido:',
+				customEvent.detail
+			);
+
+			// Aguardar um pequeno período e então forçar a atualização do estado
+			await new Promise((resolve) => setTimeout(resolve, 300));
+			await forceRefresh();
+
+			console.log(
+				'[AUTH] Estado de autenticação atualizado após evento de login'
+			);
+		};
+
+		// Registrar o listener
+		window.addEventListener('auth:login-complete', handleLoginComplete);
+
+		// Cleanup
+		return () => {
+			window.removeEventListener('auth:login-complete', handleLoginComplete);
+		};
+	}, [forceRefresh]);
 
 	return (
 		<AuthContext.Provider
@@ -474,6 +580,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 				logout,
 				getJwtToken,
 				getApiToken,
+				forceRefresh,
 			}}
 		>
 			{children}

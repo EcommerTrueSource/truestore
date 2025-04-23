@@ -22,6 +22,116 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
+// Componente de Animação do Logout que permanece visível e cobre toda a tela
+function LogoutAnimation({
+	phase,
+	onLogout,
+}: {
+	phase: number;
+	onLogout?: () => void;
+}) {
+	// useEffect para acionar o logout quando a fase 2 estiver completa
+	useEffect(() => {
+		if (phase === 2 && onLogout) {
+			// Dar tempo para a animação de check ser vista
+			const timer = setTimeout(() => {
+				onLogout();
+			}, 1200);
+
+			return () => clearTimeout(timer);
+		}
+	}, [phase, onLogout]);
+
+	return (
+		<div className="fixed inset-0 bg-white z-[99999] flex items-center justify-center">
+			<motion.div
+				initial={{ opacity: 0 }}
+				animate={{ opacity: 1 }}
+				transition={{ duration: 0.3 }}
+				className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[99999] flex items-center justify-center"
+			>
+				<motion.div
+					initial={{ scale: 0.9, opacity: 0 }}
+					animate={{ scale: 1, opacity: 1 }}
+					transition={{
+						duration: 0.5,
+						ease: 'easeOut',
+					}}
+					className="bg-white p-10 rounded-2xl shadow-xl text-center max-w-md flex flex-col items-center"
+				>
+					<div className="relative w-24 h-24 mx-auto mb-8">
+						{phase < 2 ? (
+							<>
+								<div className="absolute inset-0 rounded-full bg-gradient-to-r from-brand-magenta to-brand-orange opacity-20 animate-ping"></div>
+								<div className="relative w-24 h-24 rounded-full bg-gradient-to-r from-brand-magenta to-brand-orange p-[3px]">
+									<div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+										<div className="w-14 h-14 border-4 border-t-brand-magenta border-r-transparent border-b-brand-orange border-l-transparent rounded-full animate-spin"></div>
+									</div>
+								</div>
+							</>
+						) : (
+							<motion.div
+								initial={{ scale: 0.8, opacity: 0 }}
+								animate={{ scale: 1, opacity: 1 }}
+								transition={{ duration: 0.5, type: 'spring' }}
+								className="relative w-24 h-24 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="h-14 w-14 text-white"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<motion.path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={3}
+										d="M5 13l4 4L19 7"
+										initial={{ pathLength: 0 }}
+										animate={{ pathLength: 1 }}
+										transition={{ duration: 0.6, delay: 0.2 }}
+									/>
+								</svg>
+							</motion.div>
+						)}
+					</div>
+					<motion.h3
+						initial={{ y: 10, opacity: 0 }}
+						animate={{ y: 0, opacity: 1 }}
+						transition={{ delay: 0.2 }}
+						className="text-2xl font-medium text-gray-900 mb-3"
+					>
+						{phase < 2 ? 'Fazendo logout' : 'Logout concluído'}
+					</motion.h3>
+					<motion.p
+						initial={{ y: 10, opacity: 0 }}
+						animate={{ y: 0, opacity: 1 }}
+						transition={{ delay: 0.3 }}
+						className="text-lg text-gray-600"
+					>
+						{phase < 2
+							? 'Encerrando sua sessão...'
+							: 'Redirecionando para a página de login...'}
+					</motion.p>
+				</motion.div>
+			</motion.div>
+		</div>
+	);
+}
 
 interface UserDropdownProps {
 	className?: string;
@@ -30,14 +140,81 @@ interface UserDropdownProps {
 export default function UserDropdown({ className }: UserDropdownProps) {
 	const { user, isAuthenticated, logout, isLoading } = useAuth();
 	const router = useRouter();
+	const [isLoggingOut, setIsLoggingOut] = useState(false);
+	const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+	const [phase, setPhase] = useState(1);
 
-	const handleLogout = async () => {
-		await logout();
+	const handleLogoutClick = () => {
+		// Mostrar diálogo de confirmação
+		setShowLogoutConfirm(true);
+	};
+
+	// Abordagem mais confiável para o logout com frame oculto
+	const handleConfirmLogout = () => {
+		try {
+			// Fechar o diálogo de confirmação
+			setShowLogoutConfirm(false);
+
+			// Mostrar animação de logout
+			setIsLoggingOut(true);
+
+			// Mudar para fase de processamento
+			setTimeout(async () => {
+				try {
+					// Limpar o estado do usuário no lado do cliente
+					await logout();
+
+					// Avançar para fase de conclusão
+					setPhase(2);
+
+					// O redirecionamento será executado pelo componente LogoutAnimation
+					// quando a fase 2 estiver completa
+				} catch (error) {
+					console.error('Erro ao limpar estado do logout:', error);
+					// Mesmo com erro, mostramos a conclusão e redirecionamos
+					setPhase(2);
+				}
+			}, 1500);
+		} catch (error) {
+			console.error('Erro geral no logout:', error);
+			// Em caso de erro no processo, tentar o redirecionamento direto
+			window.location.href = '/login';
+		}
+	};
+
+	const handleCancelLogout = () => {
+		// Fechar o diálogo de confirmação
+		setShowLogoutConfirm(false);
 	};
 
 	const handleLogin = () => {
 		router.push('/login');
 	};
+
+	// Função que realiza o redirecionamento final
+	const performLogout = useCallback(() => {
+		// Criar um iframe invisível para carregar a página de logout
+		// Isso garante que a animação continue visível enquanto o navegador processa o logout
+		const iframe = document.createElement('iframe');
+		iframe.style.display = 'none';
+		document.body.appendChild(iframe);
+
+		// Configurar um ouvinte para o iframe que garantirá que sejamos redirecionados
+		// mesmo se o iframe falhar
+		const fallbackTimer = setTimeout(() => {
+			window.location.href = '/login';
+		}, 2000);
+
+		// Quando o iframe terminar de carregar, remova o timer de fallback
+		iframe.onload = () => {
+			clearTimeout(fallbackTimer);
+			// Forçar a navegação para login
+			window.location.href = '/login';
+		};
+
+		// Configurar o iframe para carregar a API de logout
+		iframe.src = '/api/auth/logout';
+	}, []);
 
 	// Mostrar estado de carregamento até que a autenticação seja verificada
 	if (isLoading) {
@@ -77,106 +254,141 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 			.toUpperCase() || 'U';
 
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="rounded-full bg-gray-50 p-0 h-11 w-11 overflow-hidden"
-				>
-					<Avatar className="h-full w-full border-2 border-white shadow-sm">
-						<AvatarImage
-							src={user.imageUrl || ''}
-							alt={user.name}
-							className="object-cover w-full h-full !rounded-full"
-							style={{
-								transform: 'translateZ(0)',
-							}}
-						/>
-						<AvatarFallback className="bg-brand text-white text-sm font-semibold">
-							{initials}
-						</AvatarFallback>
-					</Avatar>
-				</Button>
-			</DropdownMenuTrigger>
+		<>
+			{/* Diálogo de confirmação de logout */}
+			<AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+				<AlertDialogContent className="max-w-md">
+					<AlertDialogHeader>
+						<AlertDialogTitle>Deseja sair da sua conta?</AlertDialogTitle>
+						<AlertDialogDescription>
+							Você será desconectado da True Store e redirecionado para a página
+							de login.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel
+							onClick={handleCancelLogout}
+							className="border-gray-200"
+						>
+							Cancelar
+						</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={handleConfirmLogout}
+							className="bg-gradient-to-r from-brand-magenta to-brand-orange text-white hover:from-brand-magenta/90 hover:to-brand-orange/90"
+						>
+							Sim, quero sair
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
-			<DropdownMenuContent align="end" className="w-64 p-2">
-				<div className="flex items-center p-3 gap-3 bg-gray-50/50 rounded-md">
-					<Avatar className="h-12 w-12 border-2 border-white shadow-sm flex-shrink-0">
-						<AvatarImage
-							src={user.imageUrl || ''}
-							alt={user.name}
-							className="object-cover w-full h-full !rounded-full"
-							style={{
-								transform: 'translateZ(0)',
-							}}
-						/>
-						<AvatarFallback className="bg-brand text-white text-sm font-semibold">
-							{initials}
-						</AvatarFallback>
-					</Avatar>
-					<div className="flex flex-col min-w-0">
-						<p className="font-medium text-base truncate">{user.name}</p>
-						<p className="text-sm text-muted-foreground truncate">
-							{user.email}
-						</p>
+			{/* Tela de animação de logout */}
+			{isLoggingOut && (
+				<LogoutAnimation phase={phase} onLogout={performLogout} />
+			)}
+
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="rounded-full bg-gray-50 p-0 h-11 w-11 overflow-hidden"
+					>
+						<Avatar className="h-full w-full border-2 border-white shadow-sm">
+							<AvatarImage
+								src={user.imageUrl || ''}
+								alt={user.name}
+								className="object-cover w-full h-full !rounded-full"
+								style={{
+									transform: 'translateZ(0)',
+								}}
+							/>
+							<AvatarFallback className="bg-brand text-white text-sm font-semibold">
+								{initials}
+							</AvatarFallback>
+						</Avatar>
+					</Button>
+				</DropdownMenuTrigger>
+
+				<DropdownMenuContent align="end" className="w-64 p-2">
+					<div className="flex items-center p-3 gap-3 bg-gray-50/50 rounded-md">
+						<Avatar className="h-12 w-12 border-2 border-white shadow-sm flex-shrink-0">
+							<AvatarImage
+								src={user.imageUrl || ''}
+								alt={user.name}
+								className="object-cover w-full h-full !rounded-full"
+								style={{
+									transform: 'translateZ(0)',
+								}}
+							/>
+							<AvatarFallback className="bg-brand text-white text-sm font-semibold">
+								{initials}
+							</AvatarFallback>
+						</Avatar>
+						<div className="flex flex-col min-w-0">
+							<p className="font-medium text-base truncate">{user.name}</p>
+							<p className="text-sm text-muted-foreground truncate">
+								{user.email}
+							</p>
+						</div>
 					</div>
-				</div>
 
-				<DropdownMenuSeparator />
+					<DropdownMenuSeparator />
 
-				<DropdownMenuGroup>
+					<DropdownMenuGroup>
+						<DropdownMenuItem
+							asChild
+							className="flex items-center cursor-pointer p-2"
+						>
+							<Link href="/favorites">
+								<Heart className="mr-2 h-4 w-4 icon-brand" />
+								<span>Meus Favoritos</span>
+							</Link>
+						</DropdownMenuItem>
+
+						<DropdownMenuItem
+							asChild
+							className="flex items-center cursor-pointer p-2"
+						>
+							<Link href="/purchase-history">
+								<History className="mr-2 h-4 w-4 icon-brand" />
+								<span>Histórico de Compras</span>
+							</Link>
+						</DropdownMenuItem>
+
+						<DropdownMenuItem
+							asChild
+							className="flex items-center cursor-pointer p-2"
+						>
+							<Link href="/perfil">
+								<User className="mr-2 h-4 w-4 icon-brand" />
+								<span>Minha Conta</span>
+							</Link>
+						</DropdownMenuItem>
+
+						<DropdownMenuItem
+							asChild
+							className="flex items-center cursor-pointer p-2"
+						>
+							<Link href="/help">
+								<HelpCircle className="mr-2 h-4 w-4" />
+								<span>Ajuda</span>
+							</Link>
+						</DropdownMenuItem>
+					</DropdownMenuGroup>
+
+					<DropdownMenuSeparator />
+
 					<DropdownMenuItem
-						asChild
-						className="flex items-center cursor-pointer p-2"
+						onClick={handleLogoutClick}
+						className="text-red-500 cursor-pointer p-2 relative"
+						disabled={isLoggingOut}
 					>
-						<Link href="/favorites">
-							<Heart className="mr-2 h-4 w-4 icon-brand" />
-							<span>Meus Favoritos</span>
-						</Link>
+						<LogOut className="mr-2 h-4 w-4" />
+						<span>Sair</span>
 					</DropdownMenuItem>
-
-					<DropdownMenuItem
-						asChild
-						className="flex items-center cursor-pointer p-2"
-					>
-						<Link href="/purchase-history">
-							<History className="mr-2 h-4 w-4 icon-brand" />
-							<span>Histórico de Compras</span>
-						</Link>
-					</DropdownMenuItem>
-
-					<DropdownMenuItem
-						asChild
-						className="flex items-center cursor-pointer p-2"
-					>
-						<Link href="/perfil">
-							<User className="mr-2 h-4 w-4 icon-brand" />
-							<span>Minha Conta</span>
-						</Link>
-					</DropdownMenuItem>
-
-					<DropdownMenuItem
-						asChild
-						className="flex items-center cursor-pointer p-2"
-					>
-						<Link href="/help">
-							<HelpCircle className="mr-2 h-4 w-4" />
-							<span>Ajuda</span>
-						</Link>
-					</DropdownMenuItem>
-				</DropdownMenuGroup>
-
-				<DropdownMenuSeparator />
-
-				<DropdownMenuItem
-					onClick={handleLogout}
-					className="text-red-500 cursor-pointer p-2"
-				>
-					<LogOut className="mr-2 h-4 w-4" />
-					<span>Sair</span>
-				</DropdownMenuItem>
-			</DropdownMenuContent>
-		</DropdownMenu>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</>
 	);
 }

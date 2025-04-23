@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * Extrai o token True Core dos cookies da requisição ou do cabeçalho Authorization
+ * 
+ * @deprecated Esta implementação específica deve ser migrada para usar o extractToken do TrueCore
  */
 function extractToken(request: NextRequest): string | null {
   // Primeiro tenta obter do cabeçalho Authorization
@@ -15,7 +17,11 @@ function extractToken(request: NextRequest): string | null {
 }
 
 /**
- * Rota proxy para categorias do True Core
+ * Rota proxy alternativa para categorias do True Core
+ * 
+ * @deprecated Esta rota duplica a funcionalidade de /api/marketing/products/categories
+ * e deve ser considerada como legada. Utilize /api/categories como ponto de entrada unificado.
+ * 
  * GET /api/marketing/categories
  */
 export async function GET(request: NextRequest) {

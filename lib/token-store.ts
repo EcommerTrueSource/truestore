@@ -1,163 +1,256 @@
 'use client';
 
 /**
- * Store global para gerenciar o token do True Core
+ * TokenStore - Armazenamento local para tokens de autenticação
+ * 
+ * Este módulo gerencia o armazenamento e recuperação de tokens JWT
+ * tanto no localStorage quanto na memória durante o tempo de vida da sessão.
+ */
+
+// Nome da chave usada para armazenar o token no localStorage
+const TOKEN_KEY = 'true_core_token';
+// Nome da chave para controle de recargas da página
+const RELOAD_TRACKER_KEY = 'store_reload_tracker';
+
+/**
+ * Classe para gerenciar tokens de autenticação
  */
 class TokenStore {
-  private static instance: TokenStore;
+	[x: string]: any;
   private token: string | null = null;
-  private expiresAt: number | null = null;
-  // Tempo mínimo restante (em ms) para considerar um token ainda válido
-  private readonly SAFETY_MARGIN = 5 * 60 * 1000; // 5 minutos
+  private hasCheckedStorage: boolean = false;
+  private tokenExpiresAt: number | null = null;
 
-  private constructor() {
-    // Ao inicializar, tentar recuperar o token do localStorage se existir
-    this.migrateFromLocalStorage();
-  }
-  
   /**
-   * Migração de tokens do localStorage para o TokenStore (memória)
+   * Inicializa o armazenamento de tokens verificando o localStorage
    */
-  private migrateFromLocalStorage(): void {
-    try {
-      if (typeof window === 'undefined') return;
-      
-      const storedToken = localStorage.getItem('true_core_token');
+  constructor() {
+    // A verificação do localStorage é feita sob demanda
+    // para evitar problemas com SSR
+  }
+
+  /**
+   * Verifica se existe um token válido (tanto em memória quanto no localStorage)
+   */
+  hasValidToken(): boolean {
+    // Se já temos um token em memória, ele é válido
+    if (this.token) {
+      return true;
+    }
+
+    // Verificar localStorage, mas apenas no lado do cliente
+    if (typeof window !== 'undefined' && !this.hasCheckedStorage) {
+      this.hasCheckedStorage = true;
+      const storedToken = localStorage.getItem(TOKEN_KEY);
       if (storedToken) {
-        try {
-          const tokenData = JSON.parse(storedToken);
-          if (tokenData.token && tokenData.expiresAt && Date.now() < tokenData.expiresAt) {
-            this.token = tokenData.token;
-            this.expiresAt = tokenData.expiresAt;
-            console.log('Token migrado do localStorage para TokenStore');
-          }
-        } catch (e) {
-          // Se não conseguir fazer parse do JSON, pode ser o token direto
-          const expiresAt = Date.now() + 3600 * 1000; // 1 hora
+        // Verificar se o token parece válido (pelo menos é um JWT)
+        if (this.isTokenFormatValid(storedToken)) {
           this.token = storedToken;
-          this.expiresAt = expiresAt;
-          console.log('Token raw migrado do localStorage para TokenStore');
+          return true;
         }
       }
-    } catch (error) {
-      console.error('Erro ao migrar token do localStorage:', error);
     }
+
+    return false;
   }
 
   /**
-   * Obtém a instância única do TokenStore (singleton)
+   * Verifica se um token tem formato válido de JWT
    */
-  public static getInstance(): TokenStore {
-    if (!TokenStore.instance) {
-      TokenStore.instance = new TokenStore();
+  private isTokenFormatValid(token: string): boolean {
+    // Um JWT válido tem formato xxxxx.yyyyy.zzzzz
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return false;
     }
-    return TokenStore.instance;
-  }
 
-  /**
-   * Define o token com sua data de expiração
-   */
-  public setToken(token: string, expiresInSeconds: number = 3600): void {
-    if (!token) return;
-    
-    // Analisar o token JWT para extrair a expiração do payload
+    // Verificar se cada parte parece ser Base64 válido
     try {
-      const tokenParts = token.split('.');
-      if (tokenParts.length === 3) {
-        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
-        if (payload.exp) {
-          // Se o token tem um campo exp, usar essa data ao invés do padrão
-          const expTimestamp = payload.exp * 1000; // Converter para milissegundos
-          const now = Date.now();
-          const calculatedExpiresIn = Math.floor((expTimestamp - now) / 1000);
-          
-          if (calculatedExpiresIn > 0) {
-            console.log(`[TokenStore] Token JWT contém exp, ajustando expiração para ${calculatedExpiresIn}s`);
-            expiresInSeconds = calculatedExpiresIn;
-          } else {
-            console.warn(`[TokenStore] Token JWT já expirado! exp=${new Date(expTimestamp).toISOString()}`);
-          }
-        }
+      // Verificar se pelo menos o payload (segunda parte) pode ser decodificado
+      const payload = JSON.parse(atob(this.base64UrlDecode(parts[1])));
+      
+      // Verificar se o token tem campos básicos de JWT
+      if (!payload.sub || !payload.exp) {
+        return false;
       }
-    } catch (e) {
-      console.warn(`[TokenStore] Não foi possível analisar o token JWT:`, e);
-    }
-    
-    this.token = token;
-    this.expiresAt = Date.now() + (expiresInSeconds * 1000);
-    console.log(`[TokenStore] Token True Core armazenado. Expira em ${expiresInSeconds}s (${new Date(this.expiresAt).toISOString()})`);
-    
-    // Também armazenar no localStorage para persistência
-    try {
-      if (typeof window !== 'undefined') {
-        const tokenData = {
-          token: this.token,
-          expiresAt: this.expiresAt
-        };
-        localStorage.setItem('true_core_token', JSON.stringify(tokenData));
-        console.log(`[TokenStore] Token persistido no localStorage. Expira em ${new Date(this.expiresAt).toISOString()}`);
+
+      // Verificar se o token não está expirado
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp < now) {
+        console.log("[TokenStore] Token expirado");
+        return false;
       }
+
+      return true;
     } catch (e) {
-      console.error('[TokenStore] Erro ao persistir token no localStorage:', e);
+      console.error("[TokenStore] Erro ao verificar token:", e);
+      return false;
     }
   }
 
   /**
-   * Obtém o token atual, se for válido
+   * Decodifica uma string Base64URL para Base64 padrão
    */
-  public getToken(): string | null {
-    if (!this.token || !this.expiresAt) {
-      console.log('[TokenStore] Nenhum token armazenado');
-      return null;
+  private base64UrlDecode(input: string): string {
+    // Converter Base64URL para Base64
+    let output = input.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Adicionar padding se necessário
+    const padding = output.length % 4;
+    if (padding) {
+      if (padding === 1) {
+        throw new Error('Base64URL string inválida');
+      }
+      output += '=='.slice(0, 4 - padding);
     }
     
-    // Verificar se o token não expirou, considerando a margem de segurança
-    if (Date.now() < (this.expiresAt - this.SAFETY_MARGIN)) {
-      const secondsRemaining = Math.floor((this.expiresAt - Date.now()) / 1000);
-      console.log(`[TokenStore] Token válido, expira em ${secondsRemaining}s (${new Date(this.expiresAt).toISOString()})`);
+    return output;
+  }
+
+  /**
+   * Obter o token atual (da memória ou do localStorage)
+   */
+  getToken(): string | null {
+    // Se temos token em memória, retorná-lo
+    if (this.token) {
       return this.token;
     }
-    
-    console.log(`[TokenStore] Token expirado ou próximo da expiração. Expiração: ${new Date(this.expiresAt).toISOString()}`);
-    // Token expirado ou próximo de expirar
-    this.clearToken();
+
+    // Verificar localStorage, mas apenas no lado do cliente
+    if (typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem(TOKEN_KEY);
+      if (storedToken && this.isTokenFormatValid(storedToken)) {
+        this.token = storedToken;
+        return storedToken;
+      }
+    }
+
     return null;
   }
 
   /**
-   * Verifica se o token é válido
+   * Armazena um novo token (tanto em memória quanto no localStorage)
+   * @param token O token JWT a ser armazenado
+   * @param expiresInSeconds Duração do token em segundos
    */
-  public hasValidToken(): boolean {
-    return !!this.getToken();
-  }
+  setToken(token: string, expiresInSeconds: number): void {
+    if (!token) {
+      console.warn("[TokenStore] Tentativa de armazenar token vazio ignorada");
+      return;
+    }
 
-  /**
-   * Retorna o tempo restante (em segundos) para expiração do token
-   */
-  public getTokenExpiryTimeRemaining(): number | null {
-    if (!this.expiresAt) return null;
-    const remaining = Math.max(0, this.expiresAt - Date.now());
-    return Math.floor(remaining / 1000);
-  }
+    // Armazenar em memória
+    this.token = token;
+    this.tokenExpiresAt = Date.now() + (expiresInSeconds * 1000);
 
-  /**
-   * Limpa o token atual
-   */
-  public clearToken(): void {
-    this.token = null;
-    this.expiresAt = null;
-    console.log('Token True Core removido da memória');
-    
-    // Também limpar do localStorage
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('true_core_token');
+    // Armazenar no localStorage (apenas no lado do cliente)
+    if (typeof window !== 'undefined') {
+      try {
+        // Armazenar o token
+        localStorage.setItem(TOKEN_KEY, token);
+        
+        // Também armazenar a expiração
+        localStorage.setItem(`${TOKEN_KEY}_exp`, this.tokenExpiresAt.toString());
+        
+        console.log(`[TokenStore] Token armazenado com sucesso (expira em ${expiresInSeconds} segundos)`);
+      } catch (e) {
+        console.error("[TokenStore] Erro ao armazenar token no localStorage:", e);
       }
+    }
+  }
+
+  /**
+   * Calcula quanto tempo resta até a expiração do token em segundos
+   * Retorna null se não tivermos informação sobre a expiração
+   */
+  getTokenExpiryTimeRemaining(): number | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      
+      // Primeiro tentar obter da memória
+      if (this.tokenExpiresAt) {
+        const remaining = (this.tokenExpiresAt - Date.now()) / 1000;
+        return remaining > 0 ? remaining : 0;
+      }
+      
+      // Se não temos em memória, tentar obter do localStorage
+      const expiresAtStr = localStorage.getItem(`${TOKEN_KEY}_exp`);
+      if (!expiresAtStr) return null;
+      
+      const expiresAt = parseInt(expiresAtStr, 10);
+      const remaining = (expiresAt - Date.now()) / 1000;
+      
+      // Atualizar a memória também
+      this.tokenExpiresAt = expiresAt;
+      
+      return remaining > 0 ? remaining : 0;
     } catch (e) {
-      console.error('Erro ao remover token do localStorage:', e);
+      console.error('[TokenStore] Erro ao calcular tempo de expiração:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Remove o token atual (tanto da memória quanto do localStorage)
+   */
+  clearToken(): void {
+    // Limpar da memória
+    this.token = null;
+    this.tokenExpiresAt = null;
+
+    // Limpar do localStorage (apenas no lado do cliente)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(`${TOKEN_KEY}_exp`);
+        console.log("[TokenStore] Token e expiração removidos com sucesso");
+      } catch (e) {
+        console.error("[TokenStore] Erro ao remover token do localStorage:", e);
+      }
+    }
+  }
+
+  /**
+   * Controla o número de tentativas de recarregamento para evitar loops
+   */
+  trackReload(maxReloads: number = 2): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    try {
+      // Obter o contador atual
+      const currentCountStr = localStorage.getItem(RELOAD_TRACKER_KEY) || '0';
+      const currentCount = parseInt(currentCountStr, 10);
+      
+      // Se já excedemos o limite, não permitir mais recargas
+      if (currentCount >= maxReloads) {
+        console.log(`[TokenStore] Limite de ${maxReloads} recargas atingido`);
+        return false;
+      }
+      
+      // Incrementar o contador
+      localStorage.setItem(RELOAD_TRACKER_KEY, (currentCount + 1).toString());
+      return true;
+    } catch (e) {
+      console.error("[TokenStore] Erro ao rastrear recargas:", e);
+      return false;
+    }
+  }
+
+  /**
+   * Resetar o contador de recargas
+   */
+  resetReloadTracker(): void {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(RELOAD_TRACKER_KEY);
+      } catch (e) {
+        console.error("[TokenStore] Erro ao resetar contador de recargas:", e);
+      }
     }
   }
 }
 
-// Exporta a instância como singleton
-export const tokenStore = TokenStore.getInstance(); 
+// Exportar uma única instância para toda a aplicação
+export const tokenStore = new TokenStore(); 

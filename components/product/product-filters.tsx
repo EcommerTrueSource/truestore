@@ -71,6 +71,7 @@ export function ProductFilters() {
 	const handleClearCategory = () => {
 		const params = new URLSearchParams(searchParams);
 		params.delete('category');
+		params.delete('categoryName');
 		router.push(`${pathname}?${params.toString()}`);
 	};
 

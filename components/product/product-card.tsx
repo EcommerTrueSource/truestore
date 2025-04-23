@@ -63,6 +63,21 @@ export function ProductCard({
 			return product.category.name;
 		}
 
+		// Verificar se temos a descrição com informação da categoria
+		if (product.description && typeof product.description === 'string') {
+			// Procurar padrões como "Categoria importada do Tiny: Nome da Categoria"
+			const categoryMatch = product.description.match(
+				/Categoria(?:\s+importada\s+do\s+Tiny)?:\s+([^,\.]+)/i
+			);
+			if (categoryMatch && categoryMatch[1]) {
+				const categoryFromDescription = categoryMatch[1].trim();
+				console.log(
+					`[ProductCard] Categoria extraída da descrição: "${categoryFromDescription}" para produto: ${product.name}`
+				);
+				return categoryFromDescription;
+			}
+		}
+
 		// Caso contrário, tente encontrar pelo categoryId
 		if (!product.categoryId) return 'Geral';
 

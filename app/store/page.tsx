@@ -1,20 +1,73 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import StoreLayout from '@/components/layouts/store-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Grid3X3, List, SearchIcon, ChevronDown } from 'lucide-react';
 import { ProductCard } from '@/components/product/product-card';
 import { ProductFilters } from '@/components/product/product-filters';
-import { fetchProducts } from '@/lib/api';
+import { fetchProducts, searchProducts } from '@/lib/api';
 import type { Product } from '@/types/product';
 import { useCategories } from '@/lib/contexts/categories-context';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { authService } from '@/lib/services/auth-service';
+import { tokenStore } from '@/lib/token-store';
+import { motion } from 'framer-motion';
+import { CategorySidebar } from '@/components/category/category-sidebar';
 
 // Número de produtos por página
 const PRODUCTS_PER_PAGE = 12;
+// Limite máximo de produtos que a API pode retornar por requisição
+const MAX_API_PRODUCTS = 100;
+
+/**
+ * Componente para verificar token e controlar recarregamento
+ */
+const TokenVerifier = () => {
+	useEffect(() => {
+		try {
+			// Verificar se temos um token válido na store
+			if (tokenStore.hasValidToken()) {
+				console.log('[Store] Token válido encontrado');
+				// Resetar o contador de recargas quando temos um token válido
+				tokenStore.resetReloadTracker();
+				return;
+			}
+
+			// Verificar se há parâmetros de URL que indicam navegação intencional
+			// (filtros, busca, ordenação, etc)
+			const url = new URL(window.location.href);
+			const hasCategory = url.searchParams.has('category');
+			const hasSearch = url.searchParams.has('search');
+			const hasSort = url.searchParams.has('sort');
+
+			// Se não tem token e não tem parâmetros específicos, tentar recarregar
+			// para dar outra chance de obter o token (talvez de um armazenamento persistente)
+			if (!hasCategory && !hasSearch && !hasSort) {
+				// Usar o controle de recargas para evitar loops infinitos
+				if (tokenStore.trackReload(2)) {
+					console.log(
+						'[Store] Recarregando página para tentar recuperar token...'
+					);
+					window.location.reload();
+				} else {
+					console.log(
+						'[Store] Limite de recargas atingido, redirecionando para login...'
+					);
+					window.location.href = '/login';
+				}
+			} else {
+				console.log('[Store] Usuário navegando com filtros, não recarregando');
+			}
+		} catch (error) {
+			console.error('[Store] Erro ao verificar token:', error);
+		}
+	}, []);
+
+	return null; // Este componente não renderiza nada
+};
 
 export default function StorePage() {
 	const searchParams = useSearchParams();
@@ -27,8 +80,11 @@ export default function StorePage() {
 	const [totalProducts, setTotalProducts] = useState(0);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
 	const { categories } = useCategories();
-	const { getJwtToken, isAuthenticated } = useAuth();
+	const { getJwtToken, isAuthenticated, isLoading: authLoading } = useAuth();
+	const router = useRouter();
 	const loaderRef = useRef<HTMLDivElement>(null);
+	const [dataLoadAttempts, setDataLoadAttempts] = useState(0);
+	const maxLoadAttempts = 3;
 
 	const categoryId = searchParams.get('category');
 	const searchQuery = searchParams.get('search');
@@ -64,19 +120,67 @@ export default function StorePage() {
 					'Não foi possível obter o token de autenticação. Tente fazer login novamente.'
 				);
 				setIsLoading(false);
+
+				// Se ainda não excedemos o número máximo de tentativas, tentar novamente após um atraso
+				if (dataLoadAttempts < maxLoadAttempts) {
+					console.log(
+						`[StorePage] Tentativa ${
+							dataLoadAttempts + 1
+						} de ${maxLoadAttempts} para carregar produtos`
+					);
+					setDataLoadAttempts((prev) => prev + 1);
+					setTimeout(() => {
+						loadProducts(currentPage, append);
+					}, 1000);
+				}
+
 				return;
 			}
 
-			console.log(`Iniciando busca de produtos - página ${currentPage}...`);
+			console.log(
+				`[StorePage] Iniciando busca de produtos - página ${currentPage}...`
+			);
 
-			// Buscar produtos com o token JWT
-			const productsData = await fetchProducts({
+			// Encontrar a categoria atual e seus dados
+			let categoryName = searchParams.get('categoryName');
+			let categoryItemCount: number | undefined = undefined;
+
+			if (categoryId && categoryId !== 'all') {
+				const selectedCategory = categories.find(
+					(cat) => cat.id === categoryId
+				);
+
+				if (selectedCategory) {
+					// Usar o nome da categoria da URL se disponível, caso contrário usar da lista de categorias
+					if (!categoryName) {
+						categoryName = selectedCategory.name;
+					}
+
+					// Obter o número de itens na categoria para ajustar o limite
+					if (selectedCategory.itemQuantity) {
+						categoryItemCount = Number(selectedCategory.itemQuantity);
+						console.log(
+							`[StorePage] Categoria ${categoryName} tem ${categoryItemCount} itens`
+						);
+					}
+
+					console.log(
+						`[StorePage] Buscando produtos da categoria: ${categoryName} (ID: ${categoryId})`
+					);
+				}
+			}
+
+			// Usar a nova função de busca avançada com o número de itens da categoria
+			const productsData = await searchProducts({
+				query: searchQuery || undefined,
 				categoryId,
+				categoryName,
+				categoryItemCount,
 				sortBy,
-				search: searchQuery ? searchQuery : undefined,
 				jwtToken,
 				page: currentPage,
 				limit: PRODUCTS_PER_PAGE,
+				searchQuery: searchQuery || undefined,
 			});
 
 			if (append) {
@@ -88,14 +192,43 @@ export default function StorePage() {
 			}
 
 			// Verificar se há mais produtos para carregar
-			setHasMore(productsData.length === PRODUCTS_PER_PAGE);
+			if (productsData.length === MAX_API_PRODUCTS) {
+				// Quando retorna 100 produtos (o máximo), assumimos que pode haver mais
+				setHasMore(true);
+				console.log(
+					'[StorePage] Limite máximo de produtos atingido (100), habilitando carregamento de mais'
+				);
+			} else if (
+				categoryItemCount &&
+				(append ? totalProducts + productsData.length : productsData.length) <
+					categoryItemCount
+			) {
+				// Se sabemos o total da categoria e ainda não carregamos todos
+				setHasMore(true);
+				console.log(
+					`[StorePage] Carregados ${
+						append ? totalProducts + productsData.length : productsData.length
+					} de ${categoryItemCount} produtos`
+				);
+			} else {
+				// Se retornou menos produtos que o limite, assumimos que não há mais
+				setHasMore(productsData.length === PRODUCTS_PER_PAGE);
+				console.log(
+					`[StorePage] ${productsData.length} produtos carregados, ${
+						hasMore ? 'há' : 'não há'
+					} mais para carregar`
+				);
+			}
+
 			setTotalProducts((prev) =>
 				append ? prev + productsData.length : productsData.length
 			);
 
-			console.log(`${productsData.length} produtos carregados com sucesso`);
+			console.log(
+				`[StorePage] ${productsData.length} produtos carregados com sucesso`
+			);
 		} catch (error) {
-			console.error('Falha ao carregar produtos:', error);
+			console.error('[StorePage] Falha ao carregar produtos:', error);
 			setError(
 				'Não foi possível carregar os produtos. Por favor, tente novamente mais tarde.'
 			);
@@ -150,8 +283,115 @@ export default function StorePage() {
 		loadProducts(1, false);
 	}, [categoryId, sortBy, searchQuery, getJwtToken, isAuthenticated]);
 
+	// Redirecionamento para login se não estiver autenticado
+	useEffect(() => {
+		const checkAuth = async () => {
+			// Verificar se temos um token válido (True Core)
+			const apiToken = await authService.getApiToken();
+			console.log('[Store] Token válido encontrado:', !!apiToken);
+
+			// Aguardar um tempo para garantir que o contexto de autenticação seja atualizado
+			await new Promise((resolve) => setTimeout(resolve, 500));
+
+			// Se não há token e não estamos carregando, redirecionar para login
+			if (!apiToken && !authLoading) {
+				console.log(
+					'[StorePage] Usuário não autenticado, redirecionando para login'
+				);
+				router.push('/login');
+			}
+		};
+
+		// Verificar autenticação ao montar, mas apenas se o componente estiver montado no cliente
+		if (typeof window !== 'undefined') {
+			checkAuth();
+		}
+	}, [router, authLoading]);
+
+	// Adicionar um listener para o evento auth:login-complete
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+
+		// Flag para controlar se estamos no meio de um processo de login
+		let isLoggingIn = false;
+
+		// Handler para o evento de conclusão de login
+		const handleLoginComplete = () => {
+			console.log('[StorePage] Evento auth:login-complete recebido');
+			// Marcar que estamos no meio de um processo de login
+			isLoggingIn = true;
+
+			// Limpar a flag após algum tempo
+			setTimeout(() => {
+				isLoggingIn = false;
+			}, 5000); // 5 segundos deve ser suficiente
+		};
+
+		// Registrar o listener
+		window.addEventListener('auth:login-complete', handleLoginComplete);
+
+		// Criar uma função para verificar o redirecionamento
+		// Este efeito será para checar autenticação em intervalos regulares
+		const checkRedirect = () => {
+			// Se estivermos no meio de um login, não redirecionar
+			if (isLoggingIn) {
+				console.log(
+					'[StorePage] Aguardando conclusão do login, não redirecionando'
+				);
+				return;
+			}
+
+			// Verificar se ainda estamos autenticados
+			authService.getApiToken().then((token) => {
+				if (!token && !isLoggingIn) {
+					console.log('[StorePage] Token expirado, redirecionando para login');
+					router.push('/login');
+				}
+			});
+		};
+
+		// Verificar a cada 5 segundos
+		const interval = setInterval(checkRedirect, 5000);
+
+		// Cleanup
+		return () => {
+			window.removeEventListener('auth:login-complete', handleLoginComplete);
+			clearInterval(interval);
+		};
+	}, [router]);
+
+	// Mostrar tela de carregamento enquanto verifica a autenticação
+	if (authLoading || (!isAuthenticated && !error)) {
+		return (
+			<StoreLayout hideSidebar={true}>
+				<div className="min-h-[80vh] flex flex-col items-center justify-center">
+					<div className="text-center bg-white p-8 rounded-xl shadow-sm border border-gray-100 max-w-md mx-auto">
+						<div className="relative w-16 h-16 mx-auto mb-6">
+							<div className="absolute inset-0 rounded-full bg-gradient-to-r from-brand-magenta to-brand-orange opacity-20 animate-ping"></div>
+							<div className="relative w-16 h-16 rounded-full bg-gradient-to-r from-brand-magenta to-brand-orange p-[3px]">
+								<div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+									<div className="w-10 h-10 border-4 border-t-brand-magenta border-r-transparent border-b-brand-orange border-l-transparent rounded-full animate-spin"></div>
+								</div>
+							</div>
+						</div>
+
+						<h3 className="text-xl font-medium text-gray-900 mb-2">
+							Verificando acesso
+						</h3>
+						<p className="text-gray-600 mb-4">
+							Preparando sua experiência na loja...
+						</p>
+					</div>
+				</div>
+			</StoreLayout>
+		);
+	}
+
 	return (
 		<StoreLayout hideSidebar={false}>
+			{/* Componente para verificar token */}
+			<TokenVerifier />
+
 			<div className="max-w-6xl mx-auto py-8 space-y-6">
 				{/* Cabeçalho da loja */}
 				<div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">

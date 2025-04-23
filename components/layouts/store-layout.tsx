@@ -15,6 +15,7 @@ import { default as NotificationsDropdown } from '../ui/notifications-dropdown';
 import { default as UserDropdown } from '../ui/user-dropdown';
 import { useFavorites } from '@/lib/contexts/favorites-context';
 import { useCart } from '@/lib/contexts/cart-context';
+import { useAuth } from '@/lib/contexts/auth-context';
 
 interface StoreLayoutProps {
 	children: React.ReactNode;
@@ -30,6 +31,18 @@ export default function StoreLayout({
 	const router = useRouter();
 	const { totalFavorites } = useFavorites();
 	const { totalItems, totalPrice } = useCart();
+	const { isAuthenticated, isLoading } = useAuth();
+
+	// Verificar autenticação e redirecionar para login se necessário
+	useEffect(() => {
+		// Aguardar carregamento inicial da autenticação
+		if (!isLoading && !isAuthenticated) {
+			console.log(
+				'[StoreLayout] Usuário não autenticado, redirecionando para login'
+			);
+			router.push('/login');
+		}
+	}, [isAuthenticated, isLoading, router]);
 
 	// Fechar sidebar em mudanças de rota em dispositivos móveis
 	useEffect(() => {
@@ -164,12 +177,13 @@ export default function StoreLayout({
 						<AnimatePresence mode="wait">
 							<motion.div
 								key={pathname}
-								initial={{ opacity: 0 }}
-								animate={{ opacity: 1 }}
-								exit={{ opacity: 0 }}
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0, y: -10 }}
 								transition={{
-									duration: 0.2,
+									duration: 0.3,
 									ease: 'easeInOut',
+									staggerChildren: 0.1,
 								}}
 							>
 								{children}

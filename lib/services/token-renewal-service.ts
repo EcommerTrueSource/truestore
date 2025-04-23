@@ -84,8 +84,8 @@ export const TokenRenewalService = {
         }
 
         // Renovar o token passando o JWT do Clerk
-        const result = await authService.getApiToken(clerkToken);
-        if (result && result.access_token) {
+        const result = await authService.exchangeToken(clerkToken);
+        if (result) {
           console.log('Token renovado com sucesso');
         } else {
           console.error('Falha ao renovar o token da API');

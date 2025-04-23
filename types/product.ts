@@ -13,6 +13,7 @@ export interface Product {
   }
   codigo?: string
   unidade?: string
+  active?: boolean
 }
 
 export interface Category {

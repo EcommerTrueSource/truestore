@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Função para criar um handler de API que encaminha requisições para a API externa
+ * Utilitário para criar handlers de API que encaminham requisições para a API externa
+ * 
+ * Este arquivo fornece um criador de rotas simplificado que encaminha requisições
+ * da API pública do frontend para a API True Core (backend). Ele funciona como uma
+ * camada de abstração que oculta detalhes de implementação da API externa.
+ * 
+ * Cada rota criada com este utilitário segue um padrão de proxy consistente:
+ * - Extrai o token de autenticação da requisição
+ * - Encaminha a requisição com o método original para o endpoint correspondente
+ * - Processa os parâmetros de rota (como :id) substituindo-os pelos valores reais
+ * - Retorna a resposta da API externa para o cliente
+ * 
  * @param apiPath - Caminho da API externa (sem a URL base)
  */
 export function createApiRouteHandler(apiPath: string) {
@@ -47,7 +58,16 @@ export function createApiRouteHandler(apiPath: string) {
       const queryString = searchParams ? `?${searchParams}` : '';
       
       // Construir a URL completa para a API externa
-      const url = `${apiUrl.replace(/\/api$/, '')}${apiPath}${queryString}`;
+      let finalPath = apiPath;
+      
+      // Substituir parâmetros dinâmicos no caminho (ex: :id)
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          finalPath = finalPath.replace(`:${key}`, value);
+        });
+      }
+      
+      const url = `${apiUrl.replace(/\/api$/, '')}${finalPath}${queryString}`;
       
       // Construir os cabeçalhos para a API externa
       const headers = new Headers();

@@ -43,6 +43,27 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 
 	// Função para carregar categorias que pode ser chamada explicitamente
 	const loadCategories = async (force = false) => {
+		// Verificar se estamos na página de login - não carregar categorias nessa página
+		if (
+			typeof window !== 'undefined' &&
+			window.location.pathname === '/login'
+		) {
+			console.log(
+				'[CATEGORIES] Na página de login, evitando carregamento de categorias'
+			);
+			setIsLoading(false);
+			return;
+		}
+
+		// Se não estiver autenticado, não tentar carregar categorias
+		if (!isAuthenticated) {
+			console.log(
+				'[CATEGORIES] Usuário não autenticado, abortando carregamento de categorias'
+			);
+			setIsLoading(false);
+			return;
+		}
+
 		// Se não for forçado e já foi inicializado, retornar
 		if (!force && isInitialized) return;
 
@@ -135,7 +156,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 
 									// Validar que não é null nem undefined antes de salvar
 									if (token) {
-										tokenStore.setToken(token);
+										tokenStore.setToken(token, 86400);
 										console.log(
 											'[CATEGORIES] Token True Core obtido via troca'
 										);
@@ -163,7 +184,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 						console.log('[CATEGORIES] Token extraído do cookie');
 
 						// Armazenar para uso futuro
-						if (token) tokenStore.setToken(token);
+						if (token) tokenStore.setToken(token, 86400);
 					}
 				} catch (e) {
 					console.error('[CATEGORIES] Erro ao extrair token do cookie:', e);
@@ -275,6 +296,18 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 				customEvent.detail
 			);
 
+			// Verificar se estamos na página de login - não carregar categorias nessa página
+			if (
+				typeof window !== 'undefined' &&
+				window.location.pathname === '/login'
+			) {
+				console.log(
+					'[CATEGORIES] Na página de login, ignorando carregamento de categorias após evento auth:ready'
+				);
+				setIsLoading(false);
+				return;
+			}
+
 			if (customEvent.detail.isAuthenticated) {
 				console.log(
 					'[CATEGORIES] Autenticação pronta, iniciando carregamento de categorias'
@@ -283,6 +316,12 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 				setTimeout(() => {
 					loadCategories();
 				}, 100);
+			} else {
+				// Não carregar categorias se o usuário não estiver autenticado
+				console.log(
+					'[CATEGORIES] Usuário não autenticado, ignorando carregamento de categorias'
+				);
+				setIsLoading(false);
 			}
 		};
 
@@ -302,19 +341,53 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 		if (!isAuthenticated) return;
 
 		const hasToken = !!tokenStore.getToken();
+		const isStorePage =
+			typeof window !== 'undefined' &&
+			window.location.pathname.includes('/store');
 
-		if (hasToken && categories.length === 0 && !isLoading && !error) {
+		// Verificar se estamos na página da loja e temos token mas sem categorias
+		if (
+			(hasToken && categories.length === 0 && !isLoading && !error) ||
+			(isStorePage && hasToken && !isLoading)
+		) {
 			console.log(
-				'[CATEGORIES] Token disponível e sem categorias, carregando...'
+				'[CATEGORIES] Token disponível e estamos na página da loja, carregando categorias...'
 			);
-			// Delay para evitar concorrência com outros contextos
+			// Delay menor para evitar problemas de concorrência, mas garantir carregamento rápido
 			const timer = setTimeout(() => {
 				loadCategories();
-			}, 800);
+			}, 300);
 
 			return () => clearTimeout(timer);
 		}
-	}, [isAuthenticated, retryCount]);
+	}, [isAuthenticated, retryCount, categories.length, isLoading, error]);
+
+	// Adicionar um listener para o evento auth:login-complete
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+
+		// Handler para o evento de conclusão de login
+		const handleLoginComplete = async () => {
+			console.log(
+				'[CATEGORIES] Evento auth:login-complete recebido, recarregando categorias...'
+			);
+
+			// Aguardar um momento para garantir que o estado de autenticação esteja atualizado
+			await new Promise((resolve) => setTimeout(resolve, 500));
+
+			// Forçar o carregamento das categorias
+			setIsLoading(true);
+			loadCategories(true); // true = forçar o recarregamento
+		};
+
+		// Registrar o listener
+		window.addEventListener('auth:login-complete', handleLoginComplete);
+
+		// Cleanup
+		return () => {
+			window.removeEventListener('auth:login-complete', handleLoginComplete);
+		};
+	}, [loadCategories]);
 
 	return (
 		<CategoriesContext.Provider

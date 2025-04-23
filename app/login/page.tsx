@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useSignIn } from '@clerk/nextjs';
+import { useAuth as useClerkAuth } from '@clerk/nextjs';
 import { useToast } from '@/components/ui/use-toast';
 import { OAuthStrategy } from '@clerk/types';
 import { useAuth } from '@/lib/contexts/auth-context';
@@ -25,6 +26,7 @@ import { authService } from '@/lib/services/auth-service';
 export default function LoginPage() {
 	const router = useRouter();
 	const { isLoaded, signIn, setActive } = useSignIn();
+	const { getToken } = useClerkAuth();
 	const { toast } = useToast();
 	const { isAuthenticated, isLoading: authLoading } = useAuth();
 	const [email, setEmail] = useState('');
@@ -38,23 +40,79 @@ export default function LoginPage() {
 	// Redirecionar para a loja se o usuário já estiver autenticado
 	useEffect(() => {
 		if (mounted && !authLoading && isAuthenticated) {
+			console.log('[LOGIN] Usuário autenticado, redirecionando para a loja');
 			router.push('/store');
 		}
 	}, [mounted, isAuthenticated, authLoading, router]);
 
 	useEffect(() => {
+		// Definir o componente como montado apenas quando estiver pronto no lado do cliente
 		setMounted(true);
+
+		// Verificar se há email salvo no localStorage (funcionalidade "Lembrar-me")
+		if (typeof window !== 'undefined') {
+			const savedEmail = localStorage.getItem('true-store-remembered-email');
+			if (savedEmail) {
+				console.log('[LOGIN] Carregando email salvo:', savedEmail);
+				setEmail(savedEmail);
+				setRememberMe(true);
+			}
+		}
 	}, []);
 
+	// Mostrar animação de carregamento apenas quando estiver autenticado e montado
+	// Isso evita mostrar a animação durante o logout por padrão
+	const showRedirectAnimation = mounted && isAuthenticated && !authLoading;
+
 	// Não renderizar o conteúdo da página se o usuário já estiver autenticado
-	if (isAuthenticated) {
+	if (showRedirectAnimation) {
 		return (
-			<div className="min-h-screen flex items-center justify-center bg-white">
-				<div className="text-center">
-					<div className="w-16 h-16 border-t-4 border-brand-magenta rounded-full animate-spin mx-auto mb-4"></div>
-					<p className="text-gray-600">Redirecionando para a loja...</p>
+			<motion.div
+				className="min-h-screen flex items-center justify-center bg-white"
+				initial={{ opacity: 0 }}
+				animate={{ opacity: 1 }}
+				exit={{ opacity: 0 }}
+				transition={{ duration: 0.5 }}
+			>
+				<div className="text-center bg-white p-8 rounded-xl shadow-sm border border-gray-100 max-w-md">
+					<div className="relative w-16 h-16 mx-auto mb-4">
+						<motion.div
+							className="absolute inset-0 rounded-full bg-gradient-to-r from-brand-magenta to-brand-orange opacity-20"
+							animate={{ scale: [1, 1.2, 1] }}
+							transition={{ duration: 2, repeat: Infinity }}
+						/>
+						<div className="w-16 h-16 rounded-full bg-gradient-to-r from-brand-magenta to-brand-orange p-[3px]">
+							<div className="h-full w-full rounded-full bg-white flex items-center justify-center">
+								<motion.div
+									className="h-8 w-8 border-3 border-t-brand-magenta border-r-transparent border-b-brand-orange border-l-transparent rounded-full"
+									animate={{ rotate: 360 }}
+									transition={{
+										duration: 1.5,
+										repeat: Infinity,
+										ease: 'linear',
+									}}
+								/>
+							</div>
+						</div>
+					</div>
+					<motion.h3
+						className="text-xl font-medium text-gray-900 mb-2"
+						initial={{ y: 10, opacity: 0 }}
+						animate={{ y: 0, opacity: 1 }}
+						transition={{ delay: 0.2 }}
+					>
+						Autenticado com sucesso
+					</motion.h3>
+					<motion.p
+						className="text-gray-600"
+						initial={{ y: 10, opacity: 0 }}
+						animate={{ y: 0, opacity: 1 }}
+						transition={{ delay: 0.3 }}
+					>
+						Redirecionando para a loja...
+					</motion.p>
 				</div>
-			</div>
+			</motion.div>
 		);
 	}
 
@@ -94,8 +152,21 @@ export default function LoginPage() {
 			return;
 		}
 
+		// Gerenciar a opção "Lembrar-me"
+		if (rememberMe) {
+			// Salvar o email no localStorage para ser recuperado nas próximas visitas
+			localStorage.setItem('true-store-remembered-email', email);
+			console.log('[LOGIN] Email salvo para "Lembrar-me"');
+		} else {
+			// Se a opção não estiver marcada, remover email do localStorage
+			localStorage.removeItem('true-store-remembered-email');
+			console.log('[LOGIN] Email removido do "Lembrar-me"');
+		}
+
 		try {
 			// Autenticar com Clerk usando email/senha
+			// Este fluxo é o mesmo tanto para autenticação normal quanto social
+			console.log('Iniciando autenticação com Clerk...');
 			const result = await signIn.create({
 				identifier: email,
 				password,
@@ -104,39 +175,80 @@ export default function LoginPage() {
 			if (result.status === 'complete') {
 				// Ativar a sessão
 				await setActive({ session: result.createdSessionId });
+				console.log('Autenticação com Clerk bem-sucedida');
 
 				try {
-					// Obter token JWT do Clerk e trocá-lo por um token de API
-					const clerkToken = await result.createdSessionId;
+					// Obter token JWT do Clerk e trocá-lo por um token True Core
+					const clerkToken = await getToken();
 
 					if (clerkToken) {
-						// Iniciar o processo de troca de token em segundo plano
-						// Não esperamos a conclusão para não atrasar o login
-						authService
-							.exchangeToken(clerkToken)
-							.catch((err) =>
-								console.error('Erro ao obter token de API:', err)
+						// Trocar o token por um token True Core
+						console.log('Trocando token Clerk por token True Core...');
+						const trueToken = await authService.exchangeToken(
+							clerkToken,
+							rememberMe
+						);
+
+						if (trueToken) {
+							console.log('Token True Core obtido com sucesso');
+
+							// Importante: aguardar um tempo significativo para garantir que
+							// todos os sistemas tenham tempo de detectar o novo token e atualizar seus estados
+							console.log(
+								'Aguardando para garantir que o token seja reconhecido pelo sistema...'
 							);
+							await new Promise((resolve) => setTimeout(resolve, 1500));
+
+							// Disparar um evento personalizado para indicar que o login foi concluído
+							// Isso permitirá que outros componentes reajam a este evento
+							window.dispatchEvent(
+								new CustomEvent('auth:login-complete', {
+									detail: { success: true },
+								})
+							);
+
+							// Aguardar mais um pouco para garantir que o evento seja processado
+							await new Promise((resolve) => setTimeout(resolve, 300));
+
+							// Exibir toast de sucesso
+							toast({
+								title: 'Login realizado com sucesso',
+								description: 'Bem-vindo à True Store!',
+								variant: 'default',
+							});
+
+							// Verificar o estado de autenticação atual antes de redirecionar
+							// Se já tivermos sido redirecionados pelo efeito de autenticação, não faça nada
+							if (!isAuthenticated) {
+								console.log(
+									'Redirecionando para a loja após login bem-sucedido'
+								);
+								router.push('/store');
+							} else {
+								console.log(
+									'Usuário já autenticado, não é necessário redirecionar'
+								);
+							}
+						} else {
+							throw new Error('Não foi possível obter token True Core');
+						}
+					} else {
+						throw new Error('Token Clerk não disponível');
 					}
 				} catch (tokenError) {
 					console.error('Erro ao processar token:', tokenError);
-					// Continuar com o login mesmo que haja erro na obtenção do token
+					setError('Erro ao processar autenticação. Tente novamente.');
+					setIsLoading(false);
 				}
-
-				// Redirecionar para a loja após login bem-sucedido
-				router.push('/store');
-
-				// Exibir toast de sucesso
-				toast({
-					title: 'Login realizado com sucesso',
-					description: 'Bem-vindo à True Store!',
-					variant: 'default',
-				});
+			} else if (result.status === 'needs_second_factor') {
+				setError('Autenticação de dois fatores necessária.');
+				setIsLoading(false);
+			} else if (result.status === 'needs_new_password') {
+				setError('Redefinição de senha necessária.');
+				setIsLoading(false);
 			} else {
-				// O Clerk pode exigir uma verificação adicional
-				setError(
-					'Verificação adicional necessária. Verifique seu email para continuar.'
-				);
+				setError('Erro ao fazer login. Verifique suas credenciais.');
+				setIsLoading(false);
 			}
 		} catch (err: any) {
 			const clerkError = err as Error;
@@ -150,7 +262,6 @@ export default function LoginPage() {
 			}
 
 			setError(errorMsg);
-		} finally {
 			setIsLoading(false);
 		}
 	};
@@ -417,18 +528,42 @@ export default function LoginPage() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ delay: 0.6 }}
 						>
-							<Checkbox
-								id="remember"
-								checked={rememberMe}
-								onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-								className="text-brand-magenta focus:ring-brand-magenta"
-							/>
-							<Label
-								htmlFor="remember"
-								className="text-sm text-gray-600 cursor-pointer ml-2"
-							>
-								Lembrar-me
-							</Label>
+							<div className="flex items-center space-x-2">
+								<Checkbox
+									id="remember"
+									checked={rememberMe}
+									onCheckedChange={(checked) => {
+										const isChecked = checked === true;
+										setRememberMe(isChecked);
+										console.log(
+											`[LOGIN] Lembrar-me ${
+												isChecked ? 'ativado' : 'desativado'
+											}`
+										);
+
+										// Salvar ou remover o email imediatamente se já tivermos um
+										if (email) {
+											if (isChecked) {
+												localStorage.setItem(
+													'true-store-remembered-email',
+													email
+												);
+												console.log('[LOGIN] Email salvo para "Lembrar-me"');
+											} else {
+												localStorage.removeItem('true-store-remembered-email');
+												console.log('[LOGIN] Email removido do "Lembrar-me"');
+											}
+										}
+									}}
+									className="text-brand-magenta focus:ring-brand-magenta data-[state=checked]:bg-brand-magenta data-[state=checked]:text-white"
+								/>
+								<Label
+									htmlFor="remember"
+									className="text-sm text-gray-600 cursor-pointer ml-2"
+								>
+									Lembrar-me
+								</Label>
+							</div>
 						</motion.div>
 
 						<motion.div
@@ -473,14 +608,14 @@ export default function LoginPage() {
 						</motion.div>
 
 						<motion.div
-							className="grid grid-cols-2 gap-3"
+							className="flex justify-center"
 							initial={{ opacity: 0, y: 10 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ delay: 0.9 }}
 						>
 							<Button
 								variant="outline"
-								className="border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 h-12 transition-all duration-200"
+								className="w-full md:w-2/3 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 h-12 transition-all duration-200"
 								onClick={() => handleOAuthSignIn('oauth_google')}
 								disabled={isLoading || !isLoaded}
 							>
@@ -493,40 +628,6 @@ export default function LoginPage() {
 								/>
 								Google
 							</Button>
-							<Button
-								variant="outline"
-								className="border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 h-12 transition-all duration-200"
-								onClick={() => handleOAuthSignIn('oauth_facebook')}
-								disabled={isLoading || !isLoaded}
-							>
-								<Image
-									src="/icons/facebook.svg"
-									alt="Facebook"
-									width={20}
-									height={20}
-									className="mr-2"
-								/>
-								Facebook
-							</Button>
-						</motion.div>
-
-						<motion.div
-							className="text-center text-sm text-gray-600 mt-6"
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ delay: 1 }}
-						>
-							Não tem uma conta?{' '}
-							<Link
-								href="#"
-								className="text-brand-magenta hover:text-brand-magenta/90 font-medium transition-colors duration-200"
-								onClick={(e) => {
-									e.preventDefault();
-									router.push('/cadastro');
-								}}
-							>
-								Solicitar acesso
-							</Link>
 						</motion.div>
 					</form>
 				</motion.div>

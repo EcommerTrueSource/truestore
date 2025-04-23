@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * Extrai o token True Core dos cookies da requisição ou do cabeçalho Authorization
+ * 
+ * @deprecated Recomenda-se usar TrueCore.extractToken para padronização
  */
 function extractToken(request: NextRequest): string | null {
   // Primeiro tenta obter do cookie
@@ -17,7 +19,11 @@ function extractToken(request: NextRequest): string | null {
 }
 
 /**
- * Rota proxy para produtos do True Core
+ * Rota proxy principal para produtos do True Core
+ * 
+ * Esta é a implementação de referência para obtenção de produtos.
+ * Recomenda-se acessar produtos através do ponto de entrada unificado /api/products
+ * 
  * GET /api/marketing/products
  */
 export async function GET(request: NextRequest) {
@@ -104,6 +110,51 @@ export async function GET(request: NextRequest) {
     // Retornar os dados de resposta
     const data = await response.json();
     console.log(`[Products API] Produtos obtidos com sucesso: ${data?.data?.length || 0} itens`);
+    
+    // Filtrar produtos por categoria usando o campo description
+    if (categoryId && categoryId !== 'all' && data?.data) {
+      console.log(`[Products API] Aplicando filtro adicional por categoria ID: ${categoryId}`);
+      
+      // Primeiro, tentamos filtrar pelo categoryId diretamente (compatibilidade)
+      let filteredProducts = data.data.filter((p: any) => p.categoryId === categoryId);
+      
+      // Se não encontramos nada, tentar filtrar pelo campo description
+      if (filteredProducts.length === 0) {
+        console.log('[Products API] Nenhum produto encontrado pelo categoryId, tentando filtrar pelo campo description');
+        
+        // Buscar a categoria correspondente para obter o nome
+        const categoryName = searchParams.get('categoryName');
+        
+        if (categoryName) {
+          console.log(`[Products API] Filtrando produtos por categoria: "${categoryName}" no campo description`);
+          
+          filteredProducts = data.data.filter((p: any) => {
+            if (p.description && typeof p.description === 'string') {
+              // Verificar se a descrição contém o nome da categoria
+              const containsCategory = p.description.includes(categoryName);
+              // Log detalhado para debug
+              if (containsCategory) {
+                console.log(`[Products API] Produto "${p.name}" corresponde à categoria "${categoryName}" na descrição: "${p.description}"`);
+              }
+              return containsCategory;
+            }
+            return false;
+          });
+          
+          console.log(`[Products API] ${filteredProducts.length} produtos encontrados pelo campo description`);
+        } else {
+          console.log('[Products API] Nome da categoria não fornecido, não é possível filtrar pelo campo description');
+        }
+      }
+      
+      // Se encontramos produtos filtrados, atualizar a resposta
+      if (filteredProducts.length > 0) {
+        console.log(`[Products API] Retornando ${filteredProducts.length} produtos filtrados`);
+        data.data = filteredProducts;
+      } else {
+        console.log('[Products API] Nenhum produto corresponde aos critérios de filtro da categoria');
+      }
+    }
     
     // Log adicional para depurar se os resultados estão sendo filtrados corretamente
     if (categoryId && data?.data) {

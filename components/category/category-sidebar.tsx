@@ -28,14 +28,30 @@ export function CategorySidebar() {
 				.slice(0, 3)
 				.map((c) => ({ id: c.id, name: c.name, itemQuantity: c.itemQuantity })),
 		});
-	}, [categories, isLoading, error]);
 
-	const handleCategoryClick = (categoryId: string) => {
+		// Forçar o carregamento de categorias se estiver na página da loja e as categorias estiverem vazias
+		if (
+			pathname.includes('/store') &&
+			categories.length === 0 &&
+			!isLoading &&
+			!error
+		) {
+			console.log(
+				'[Sidebar] Forçando carregamento de categorias na página da loja'
+			);
+			reload();
+		}
+	}, [categories, isLoading, error, pathname, reload]);
+
+	const handleCategoryClick = (categoryId: string, categoryName?: string) => {
 		const params = new URLSearchParams(searchParams);
 		if (categoryId === 'all') {
 			params.delete('category');
+			params.delete('categoryName');
 		} else {
 			params.set('category', categoryId);
+			// Sempre adicionar o nome da categoria para filtro correto na API
+			params.set('categoryName', categoryName || '');
 		}
 		router.push(`${pathname}?${params.toString()}`);
 	};
@@ -135,7 +151,7 @@ export function CategorySidebar() {
 					{sortedCategories.map((category) => (
 						<button
 							key={category.id}
-							onClick={() => handleCategoryClick(category.id)}
+							onClick={() => handleCategoryClick(category.id, category.name)}
 							className={cn(
 								'w-full text-left px-4 py-3 rounded-lg transition-all flex items-center gap-3 group',
 								currentCategory === category.id ||
