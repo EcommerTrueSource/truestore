@@ -130,6 +130,19 @@ class AuthService {
         // Como fallback, também armazenar no localStorage
         this.storeToken(demoToken, rememberMe);
         
+        // Verificar se o token foi armazenado corretamente
+        if (!tokenStore.hasValidToken()) {
+          console.warn('[AuthService] Falha ao armazenar token no TokenStore, tentando novamente');
+          tokenStore.setToken(demoToken, tokenDuration);
+        }
+        
+        // Garantir que o token também seja armazenado em cookies
+        if (typeof document !== 'undefined') {
+          const maxAge = tokenDuration;
+          document.cookie = `true_core_token=${demoToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+          console.log('[AuthService] Token também armazenado em cookie');
+        }
+        
         return demoToken;
       }
       
@@ -174,6 +187,19 @@ class AuthService {
       
       // Como fallback, também armazenar no localStorage (para compatibilidade)
       this.storeToken(data.access_token, rememberMe);
+      
+      // Verificar se o token foi armazenado corretamente
+      if (!tokenStore.hasValidToken()) {
+        console.warn('[AuthService] Falha ao armazenar token no TokenStore, tentando novamente');
+        tokenStore.setToken(data.access_token, expiresInSeconds);
+      }
+      
+      // Garantir que o token também seja armazenado em cookies
+      if (typeof document !== 'undefined') {
+        const maxAge = expiresInSeconds;
+        document.cookie = `true_core_token=${data.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+        console.log('[AuthService] Token também armazenado em cookie');
+      }
       
       console.log('Token True Core obtido e armazenado com sucesso');
       return data.access_token;

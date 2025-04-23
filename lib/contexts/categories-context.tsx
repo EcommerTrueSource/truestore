@@ -367,27 +367,86 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 		if (typeof window === 'undefined') return;
 
 		// Handler para o evento de conclusão de login
-		const handleLoginComplete = async () => {
+		const handleLoginComplete = async (event: Event) => {
+			const customEvent = event as CustomEvent;
 			console.log(
-				'[CATEGORIES] Evento auth:login-complete recebido, recarregando categorias...'
+				'[CATEGORIES] Evento auth:login-complete recebido:',
+				customEvent.detail
+			);
+
+			// Verificar se o login foi por email (necessita mais tempo)
+			const isEmailLogin = customEvent.detail?.method === 'email';
+			const waitTime = isEmailLogin ? 1500 : 500;
+
+			console.log(
+				`[CATEGORIES] Aguardando ${waitTime}ms antes de carregar categorias...`
 			);
 
 			// Aguardar um momento para garantir que o estado de autenticação esteja atualizado
-			await new Promise((resolve) => setTimeout(resolve, 500));
+			await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+			// Verificar token antes de tentar carregar
+			const hasToken = !!tokenStore.getToken();
+
+			if (!hasToken) {
+				console.log('[CATEGORIES] Nenhum token disponível, esperando mais...');
+				// Tentar novamente após um tempo adicional
+				setTimeout(() => {
+					const hasTokenRetry = !!tokenStore.getToken();
+					if (hasTokenRetry) {
+						console.log(
+							'[CATEGORIES] Token encontrado na segunda tentativa, carregando categorias...'
+						);
+						setIsLoading(true);
+						loadCategories(true); // true = forçar o recarregamento
+					} else {
+						// Se ainda não tiver token, esperar pelo evento auth:state-updated
+						console.log('[CATEGORIES] Aguardando evento auth:state-updated...');
+					}
+				}, 1000);
+				return;
+			}
 
 			// Forçar o carregamento das categorias
+			console.log('[CATEGORIES] Token disponível, carregando categorias...');
 			setIsLoading(true);
 			loadCategories(true); // true = forçar o recarregamento
 		};
 
-		// Registrar o listener
+		// Adicionar um listener para o evento auth:state-updated
+		const handleAuthStateUpdated = async (event: Event) => {
+			const customEvent = event as CustomEvent;
+			console.log(
+				'[CATEGORIES] Evento auth:state-updated recebido:',
+				customEvent.detail
+			);
+
+			if (customEvent.detail?.isAuthenticated) {
+				// Aguardar um momento para garantir que o token esteja disponível
+				await new Promise((resolve) => setTimeout(resolve, 500));
+
+				// Verificar se há um token disponível
+				const hasToken = !!tokenStore.getToken();
+				if (hasToken) {
+					console.log(
+						'[CATEGORIES] Estado de autenticação atualizado com token disponível, carregando categorias...'
+					);
+					setIsLoading(true);
+					loadCategories(true);
+				}
+			}
+		};
+
+		// Registrar os listeners
 		window.addEventListener('auth:login-complete', handleLoginComplete);
+		window.addEventListener('auth:state-updated', handleAuthStateUpdated);
 
 		// Cleanup
 		return () => {
 			window.removeEventListener('auth:login-complete', handleLoginComplete);
+			window.removeEventListener('auth:state-updated', handleAuthStateUpdated);
 		};
-	}, [loadCategories]);
+	}, []);
 
 	return (
 		<CategoriesContext.Provider

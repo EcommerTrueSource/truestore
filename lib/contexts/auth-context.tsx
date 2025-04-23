@@ -551,12 +551,60 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 				customEvent.detail
 			);
 
-			// Aguardar um pequeno período e então forçar a atualização do estado
-			await new Promise((resolve) => setTimeout(resolve, 300));
-			await forceRefresh();
+			// Limpar bloqueios de tentativas de login
+			sessionStorage.removeItem('login_attempted');
+			tokenStore.resetReloadTracker();
+
+			// Verificar se o login foi com email para ajustar o tempo de espera
+			const isEmailLogin = customEvent.detail?.method === 'email';
+			const waitTime = isEmailLogin ? 800 : 300;
 
 			console.log(
+				`[AUTH] Aguardando ${waitTime}ms antes de atualizar estado...`
+			);
+			// Aguardar um pequeno período
+			await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+			// Verificar token antes de atualizar
+			const hasToken = tokenStore.hasValidToken();
+			if (!hasToken) {
+				console.log('[AUTH] Nenhum token encontrado, tentando getApiToken...');
+			}
+
+			// Tentar obter o token usando getApiToken
+			const token = await getApiToken();
+
+			if (token) {
+				console.log('[AUTH] Token obtido com sucesso em handleLoginComplete');
+				setIsAuthenticated(true);
+
+				// Se não tiver dados de usuário, criar um usuário genérico
+				if (!user) {
+					setUser({
+						id: 'login_event_user',
+						name: 'Usuário True Store',
+						email: 'usuario@truestore.com',
+						role: 'user',
+						imageUrl: undefined,
+					});
+				}
+			} else {
+				console.warn(
+					'[AUTH] Não foi possível obter token após evento de login'
+				);
+			}
+
+			// Sempre atualizar o estado para concluir o processo de login
+			setIsLoading(false);
+			console.log(
 				'[AUTH] Estado de autenticação atualizado após evento de login'
+			);
+
+			// Disparar novo evento indicando que o estado de auth foi atualizado
+			window.dispatchEvent(
+				new CustomEvent('auth:state-updated', {
+					detail: { isAuthenticated: !!token },
+				})
 			);
 		};
 
@@ -567,7 +615,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 		return () => {
 			window.removeEventListener('auth:login-complete', handleLoginComplete);
 		};
-	}, [forceRefresh]);
+	}, [forceRefresh, getApiToken, user]);
 
 	return (
 		<AuthContext.Provider

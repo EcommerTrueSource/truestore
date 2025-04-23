@@ -51,6 +51,9 @@ export default function LoginPage() {
 
 		// Verificar se há email salvo no localStorage (funcionalidade "Lembrar-me")
 		if (typeof window !== 'undefined') {
+			// Limpar indicador de tentativa de login para evitar loops
+			sessionStorage.removeItem('login_attempted');
+
 			const savedEmail = localStorage.getItem('true-store-remembered-email');
 			if (savedEmail) {
 				console.log('[LOGIN] Carregando email salvo:', savedEmail);
@@ -184,6 +187,8 @@ export default function LoginPage() {
 					if (clerkToken) {
 						// Trocar o token por um token True Core
 						console.log('Trocando token Clerk por token True Core...');
+
+						// Garantir que o token seja armazenado corretamente
 						const trueToken = await authService.exchangeToken(
 							clerkToken,
 							rememberMe
@@ -192,23 +197,29 @@ export default function LoginPage() {
 						if (trueToken) {
 							console.log('Token True Core obtido com sucesso');
 
-							// Importante: aguardar um tempo significativo para garantir que
+							// Importante: aguardar um tempo mais longo para garantir que
 							// todos os sistemas tenham tempo de detectar o novo token e atualizar seus estados
 							console.log(
 								'Aguardando para garantir que o token seja reconhecido pelo sistema...'
 							);
-							await new Promise((resolve) => setTimeout(resolve, 1500));
+							await new Promise((resolve) => setTimeout(resolve, 2500));
+
+							// Limpar qualquer contador de recarga para evitar recargas desnecessárias
+							if (typeof window !== 'undefined' && 'tokenStore' in window) {
+								// @ts-ignore
+								window.tokenStore?.resetReloadTracker?.();
+							}
 
 							// Disparar um evento personalizado para indicar que o login foi concluído
 							// Isso permitirá que outros componentes reajam a este evento
 							window.dispatchEvent(
 								new CustomEvent('auth:login-complete', {
-									detail: { success: true },
+									detail: { success: true, method: 'email' },
 								})
 							);
 
 							// Aguardar mais um pouco para garantir que o evento seja processado
-							await new Promise((resolve) => setTimeout(resolve, 300));
+							await new Promise((resolve) => setTimeout(resolve, 500));
 
 							// Exibir toast de sucesso
 							toast({
@@ -223,7 +234,11 @@ export default function LoginPage() {
 								console.log(
 									'Redirecionando para a loja após login bem-sucedido'
 								);
-								router.push('/store');
+								// Adicionar um pequeno atraso antes de redirecionar para garantir
+								// que todos os contextos foram atualizados
+								setTimeout(() => {
+									router.push('/store');
+								}, 500);
 							} else {
 								console.log(
 									'Usuário já autenticado, não é necessário redirecionar'

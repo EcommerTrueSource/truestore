@@ -41,6 +41,8 @@ class TokenStore {
     // Verificar localStorage, mas apenas no lado do cliente
     if (typeof window !== 'undefined' && !this.hasCheckedStorage) {
       this.hasCheckedStorage = true;
+      
+      // Primeiro, verificar localStorage
       const storedToken = localStorage.getItem(TOKEN_KEY);
       if (storedToken) {
         // Verificar se o token parece válido (pelo menos é um JWT)
@@ -48,6 +50,30 @@ class TokenStore {
           this.token = storedToken;
           return true;
         }
+      }
+      
+      // Se não encontrou no localStorage, verificar nos cookies
+      try {
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+          const [name, value] = cookie.trim().split('=');
+          if (name === TOKEN_KEY && value) {
+            // Verificar validade do token do cookie
+            if (this.isTokenFormatValid(value)) {
+              // Armazenar o token em memória para uso futuro
+              this.token = value;
+              // Sincronizar com localStorage para maior consistência
+              try {
+                localStorage.setItem(TOKEN_KEY, value);
+              } catch (e) {
+                console.error("[TokenStore] Erro ao sincronizar token do cookie para localStorage:", e);
+              }
+              return true;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[TokenStore] Erro ao verificar cookies:", e);
       }
     }
 
@@ -58,6 +84,10 @@ class TokenStore {
    * Verifica se um token tem formato válido de JWT
    */
   private isTokenFormatValid(token: string): boolean {
+    if (!token || typeof token !== 'string') {
+      return false;
+    }
+    
     // Um JWT válido tem formato xxxxx.yyyyy.zzzzz
     const parts = token.split('.');
     if (parts.length !== 3) {
@@ -70,15 +100,17 @@ class TokenStore {
       const payload = JSON.parse(atob(this.base64UrlDecode(parts[1])));
       
       // Verificar se o token tem campos básicos de JWT
-      if (!payload.sub || !payload.exp) {
+      if (!payload.sub && !payload.email) { // Aceitar tokens que tenham pelo menos sub OU email
         return false;
       }
 
       // Verificar se o token não está expirado
-      const now = Math.floor(Date.now() / 1000);
-      if (payload.exp < now) {
-        console.log("[TokenStore] Token expirado");
-        return false;
+      if (payload.exp) {
+        const now = Math.floor(Date.now() / 1000);
+        if (payload.exp < now) {
+          console.log("[TokenStore] Token expirado");
+          return false;
+        }
       }
 
       return true;
@@ -219,6 +251,26 @@ class TokenStore {
     }
 
     try {
+      // Verificar o tempo da última recarga
+      const lastReloadTime = sessionStorage.getItem('last_reload_time');
+      const now = Date.now();
+      
+      // Se a última recarga foi muito recente (menos de 2 segundos atrás), 
+      // incrementar o contador de recargas rápidas
+      if (lastReloadTime) {
+        const timeSinceLastReload = now - parseInt(lastReloadTime, 10);
+        
+        if (timeSinceLastReload < 2000) { // 2 segundos
+          console.log(`[TokenStore] Recarga muito rápida (${timeSinceLastReload}ms), possível loop de recargas`);
+          // Bloquear recargas adicionais se estamos recarregando muito rápido
+          localStorage.setItem(RELOAD_TRACKER_KEY, maxReloads.toString());
+          return false;
+        }
+      }
+      
+      // Registrar o tempo da recarga atual
+      sessionStorage.setItem('last_reload_time', now.toString());
+      
       // Obter o contador atual
       const currentCountStr = localStorage.getItem(RELOAD_TRACKER_KEY) || '0';
       const currentCount = parseInt(currentCountStr, 10);
@@ -245,6 +297,8 @@ class TokenStore {
     if (typeof window !== 'undefined') {
       try {
         localStorage.removeItem(RELOAD_TRACKER_KEY);
+        sessionStorage.removeItem('last_reload_time');
+        console.log("[TokenStore] Contador de recargas resetado com sucesso");
       } catch (e) {
         console.error("[TokenStore] Erro ao resetar contador de recargas:", e);
       }
