@@ -61,19 +61,31 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 					);
 					tokenStore.resetReloadTracker();
 					setVerificationComplete(true);
+					onReady();
 					return true;
 				}
 
-				// Verificar se há token em cookies
+				// Verificar se há token em cookies - importante para login por email
 				if (typeof document !== 'undefined') {
-					const cookieTokenExists = document.cookie
-						.split(';')
-						.some((item) => item.trim().startsWith('true_core_token='));
+					const cookies = document.cookie.split(';');
+					const tokenCookie = cookies.find((c) =>
+						c.trim().startsWith('true_core_token=')
+					);
 
-					if (cookieTokenExists) {
+					if (tokenCookie) {
 						console.log('[Store:TokenVerifier] Token encontrado em cookies');
+						// Extrair e armazenar no TokenStore para uso em toda a aplicação
+						const extractedToken = tokenCookie.split('=')[1].trim();
+						if (extractedToken) {
+							tokenStore.setToken(extractedToken, 86400); // 24 horas
+							console.log(
+								'[Store:TokenVerifier] Token do cookie armazenado no TokenStore'
+							);
+						}
+
 						tokenStore.resetReloadTracker();
 						setVerificationComplete(true);
+						onReady();
 						return true;
 					}
 				}
@@ -85,15 +97,41 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 					sessionStorage.removeItem('from_login');
 
 					// Verificar token após um breve atraso (aguardar eventos auth:login-complete)
-					await new Promise((resolve) => setTimeout(resolve, 800));
+					// Aumento do atraso para login por email que pode ser mais demorado
+					await new Promise((resolve) => setTimeout(resolve, 1200));
 
+					// Verificar novamente TokenStore após o atraso
 					if (tokenStore.hasValidToken()) {
 						console.log(
 							'[Store:TokenVerifier] Token válido encontrado após login'
 						);
 						tokenStore.resetReloadTracker();
 						setVerificationComplete(true);
+						onReady();
 						return true;
+					}
+
+					// Verificar cookies novamente (principalmente para login por email)
+					const cookies = document.cookie.split(';');
+					const tokenCookie = cookies.find((c) =>
+						c.trim().startsWith('true_core_token=')
+					);
+
+					if (tokenCookie) {
+						console.log(
+							'[Store:TokenVerifier] Token encontrado em cookies após atraso'
+						);
+						// Extrair e armazenar no TokenStore
+						const extractedToken = tokenCookie.split('=')[1].trim();
+						if (extractedToken) {
+							tokenStore.setToken(extractedToken, 86400);
+							console.log(
+								'[Store:TokenVerifier] Token do cookie armazenado no TokenStore'
+							);
+							setVerificationComplete(true);
+							onReady();
+							return true;
+						}
 					}
 				}
 
@@ -123,6 +161,7 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 					);
 					tokenStore.resetReloadTracker();
 					setVerificationComplete(true);
+					onReady();
 					return true;
 				}
 
@@ -149,17 +188,19 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 						'[Store:TokenVerifier] Navegação com filtros detectada, sem recarga'
 					);
 					setVerificationComplete(true);
+					onReady();
 					return true;
 				}
 			} catch (error) {
 				console.error('[Store:TokenVerifier] Erro ao verificar token:', error);
 				setVerificationComplete(true);
+				onReady();
 				return false;
 			}
 		};
 
 		checkToken();
-	}, [verificationComplete, router, loginBlocked]);
+	}, [verificationComplete, router, loginBlocked, onReady]);
 
 	// Monitorar evento de carregamento de categorias completo
 	useEffect(() => {
@@ -335,6 +376,7 @@ export default function StorePage() {
 	const [pageReady, setPageReady] = useState(false);
 	const [initialDataLoaded, setInitialDataLoaded] = useState(false);
 	const [isAuthorizationChecked, setIsAuthorizationChecked] = useState(false);
+	const [loaderKey, setLoaderKey] = useState(0);
 
 	const categoryId = searchParams.get('category');
 	const searchQuery = searchParams.get('search');
@@ -361,23 +403,41 @@ export default function StorePage() {
 		}
 
 		try {
-			// Verificar se o usuário está autenticado
-			if (!isAuthenticated && isAuthorizationChecked) {
+			// Verificar autenticação de forma mais robusta, incluindo TokenStore
+			const tokenExists = tokenStore.hasValidToken();
+			const isUserAuthenticated = isAuthenticated || tokenExists;
+
+			// Verificar se o usuário está autenticado ou tem token válido
+			if (!isUserAuthenticated && isAuthorizationChecked) {
+				console.log('[StorePage] Usuário não autenticado e sem token válido');
 				setError(
 					'Usuário não autenticado. Faça login para visualizar os produtos.'
 				);
 				setIsLoading(false);
+				setIsLoadingMore(false);
 				return;
 			}
 
-			// Obter o token JWT para autenticação
-			const jwtToken = await getJwtToken();
+			// Tentar obter token diretamente do TokenStore primeiro
+			let token = tokenStore.getToken();
+			if (!token) {
+				// Se não há token no TokenStore, tentar obter via getJwtToken
+				console.log(
+					'[StorePage] Token não encontrado no TokenStore, tentando getJwtToken'
+				);
+				token = await getJwtToken();
+			} else {
+				console.log(
+					'[StorePage] Usando token do TokenStore para carregar produtos'
+				);
+			}
 
-			if (!jwtToken && isAuthorizationChecked) {
+			if (!token && isAuthorizationChecked) {
 				setError(
 					'Não foi possível obter o token de autenticação. Tente fazer login novamente.'
 				);
 				setIsLoading(false);
+				setIsLoadingMore(false);
 
 				// Se ainda não excedemos o número máximo de tentativas, tentar novamente após um atraso
 				if (dataLoadAttempts < maxLoadAttempts) {
@@ -436,15 +496,30 @@ export default function StorePage() {
 				categoryName,
 				categoryItemCount,
 				sortBy,
-				jwtToken: jwtToken || undefined,
+				jwtToken: token || undefined,
 				page: currentPage,
 				limit: PRODUCTS_PER_PAGE,
 				searchQuery: searchQuery ? searchQuery : undefined,
 			});
 
 			if (append) {
-				// Adicionar os novos produtos à lista existente
-				setProducts((prev) => [...prev, ...productsData]);
+				// Adicionar os novos produtos à lista existente, evitando duplicatas
+				setProducts((prev) => {
+					// Criar um Set com os IDs dos produtos existentes
+					const existingIds = new Set(prev.map((product) => product.id));
+
+					// Filtrar os novos produtos para incluir apenas os que não existem ainda
+					const uniqueNewProducts = productsData.filter(
+						(product) => !existingIds.has(product.id)
+					);
+
+					console.log(
+						`[StorePage] Filtrando produtos duplicados: ${productsData.length} recebidos, ${uniqueNewProducts.length} únicos`
+					);
+
+					// Retornar a lista atualizada apenas com produtos únicos
+					return [...prev, ...uniqueNewProducts];
+				});
 			} else {
 				// Substituir completamente a lista de produtos
 				setProducts(productsData);
@@ -517,29 +592,182 @@ export default function StorePage() {
 		}
 	}, [isLoadingMore, hasMore, page]);
 
+	// Função para verificar o token quando a página volta a ficar visível
+	const checkTokenOnVisibilityChange = useCallback(() => {
+		if (document.visibilityState === 'visible') {
+			// Se tivermos mais produtos para carregar e a página estiver pronta
+			if (hasMore && pageReady && !isLoadingMore) {
+				console.log(
+					'[StorePage] Página visível novamente, verificando continuidade do carregamento'
+				);
+
+				// Verificar se o elemento de carregamento está visível
+				if (loaderRef.current) {
+					const rect = loaderRef.current.getBoundingClientRect();
+					const isVisible =
+						rect.top >= 0 &&
+						rect.left >= 0 &&
+						rect.bottom <=
+							(window.innerHeight || document.documentElement.clientHeight) &&
+						rect.right <=
+							(window.innerWidth || document.documentElement.clientWidth);
+
+					// Se o elemento estiver visível, forçar carregamento de mais produtos
+					if (isVisible) {
+						console.log(
+							'[StorePage] Elemento de carregamento visível, retomando carregamento'
+						);
+						setTimeout(() => loadMoreProducts(), 500);
+					}
+				}
+			}
+		}
+	}, [hasMore, pageReady, isLoadingMore, loadMoreProducts]);
+
+	// Adicionar listener para mudanças de visibilidade para verificar token
+	useEffect(() => {
+		document.addEventListener('visibilitychange', checkTokenOnVisibilityChange);
+		return () => {
+			document.removeEventListener(
+				'visibilitychange',
+				checkTokenOnVisibilityChange
+			);
+		};
+	}, [checkTokenOnVisibilityChange]);
+
 	// Configurar o observador de interseção para o carregamento infinito
 	useEffect(() => {
-		const observer = new IntersectionObserver(
-			(entries) => {
-				const [entry] = entries;
-				if (entry.isIntersecting && !isLoadingMore && hasMore) {
-					loadMoreProducts();
+		// Esta função configura o observador
+		const setupObserver = () => {
+			// Se não temos elementos para observar ou não temos mais produtos, não fazer nada
+			if (!loaderRef.current || !hasMore) {
+				console.log(
+					'[StorePage] Não foi possível configurar o observador: elemento não encontrado ou não há mais produtos'
+				);
+				return () => {}; // Função vazia de limpeza
+			}
+
+			console.log(
+				'[StorePage] Configurando observador de interseção para carregamento infinito'
+			);
+
+			// Criando observador com configuração simples e robusta
+			const observer = new IntersectionObserver(
+				(entries) => {
+					// Verificar se o elemento está visível e temos mais itens para carregar
+					if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
+						console.log(
+							'[StorePage] Elemento de carregamento visível, carregando mais produtos...'
+						);
+						// Carregar próxima página de produtos
+						loadMoreProducts();
+					}
+				},
+				{
+					rootMargin: '300px', // Margem maior para detectar com antecedência
+					threshold: 0.1, // Baixo limiar de interseção
 				}
-			},
-			{ threshold: 0.1 }
-		);
+			);
 
-		const currentLoader = loaderRef.current;
-		if (currentLoader) {
-			observer.observe(currentLoader);
-		}
+			// Observar o elemento de carregamento
+			observer.observe(loaderRef.current);
 
-		return () => {
-			if (currentLoader) {
-				observer.unobserve(currentLoader);
+			console.log('[StorePage] Observador configurado com sucesso');
+
+			// Retornar função para limpar o observador
+			return () => {
+				console.log('[StorePage] Desconectando observador');
+				observer.disconnect();
+			};
+		};
+
+		// Configurar o observador inicialmente
+		let cleanup = setupObserver();
+
+		// Função para tratar mudanças de visibilidade
+		const handleVisibilityChange = () => {
+			// Quando a página ficar visível
+			if (document.visibilityState === 'visible') {
+				console.log(
+					'[StorePage] Página visível novamente, reconfigurando carregamento infinito'
+				);
+
+				// Limpar observador anterior
+				if (cleanup) cleanup();
+
+				// Adicionar um pequeno atraso para garantir que a DOM esteja atualizada
+				setTimeout(() => {
+					// Verificar se o elemento ainda existe
+					if (!loaderRef.current && hasMore) {
+						console.log(
+							'[StorePage] Elemento de carregamento não encontrado, forçando atualização'
+						);
+						// Forçar re-renderização para atualizar a referência
+						setLoaderKey((prev) => prev + 1);
+
+						// Aguardar a re-renderização antes de configurar o observador
+						setTimeout(() => {
+							cleanup = setupObserver();
+
+							// Verificar se o elemento está visível após reconfiguração
+							if (loaderRef.current) {
+								const rect = loaderRef.current.getBoundingClientRect();
+								const isVisible =
+									rect.top >= 0 &&
+									rect.left >= 0 &&
+									rect.bottom <=
+										(window.innerHeight ||
+											document.documentElement.clientHeight) &&
+									rect.right <=
+										(window.innerWidth || document.documentElement.clientWidth);
+
+								// Se o elemento estiver visível, forçar carregamento
+								if (isVisible && hasMore && !isLoadingMore) {
+									console.log(
+										'[StorePage] Elemento visível após reconfiguração, carregando mais produtos'
+									);
+									loadMoreProducts();
+								}
+							}
+						}, 100);
+					} else {
+						// Configurar observador normalmente
+						cleanup = setupObserver();
+
+						// Verificar se o elemento está visível após reconfiguração
+						if (loaderRef.current) {
+							const rect = loaderRef.current.getBoundingClientRect();
+							const isVisible =
+								rect.top >= 0 &&
+								rect.left >= 0 &&
+								rect.bottom <=
+									(window.innerHeight ||
+										document.documentElement.clientHeight) &&
+								rect.right <=
+									(window.innerWidth || document.documentElement.clientWidth);
+
+							// Se o elemento estiver visível, forçar carregamento
+							if (isVisible && hasMore && !isLoadingMore) {
+								console.log(
+									'[StorePage] Elemento visível após reconfiguração, carregando mais produtos'
+								);
+								loadMoreProducts();
+							}
+						}
+					}
+				}, 300);
 			}
 		};
-	}, [loadMoreProducts, isLoadingMore, hasMore]);
+
+		// Adicionar listener para mudanças de visibilidade
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
+		// Limpeza ao desmontar
+		return () => {
+			if (cleanup) cleanup();
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+		};
+	}, [hasMore, isLoadingMore, loadMoreProducts, loaderKey]);
 
 	// Carregar produtos quando a página estiver pronta para processamento
 	useEffect(() => {
@@ -562,9 +790,20 @@ export default function StorePage() {
 		const checkAuth = async () => {
 			if (typeof window === 'undefined' || pageReady) return;
 
-			// Verificar se temos um token válido (True Core)
+			// Verificar primeira se temos um token válido no TokenStore
+			if (tokenStore.hasValidToken()) {
+				console.log('[Store] Token válido encontrado no TokenStore');
+				// Se temos um token válido, considerar como autenticado
+				setIsAuthorizationChecked(true);
+				return;
+			}
+
+			// Como alternativa, verificar o token da API (compatibilidade)
 			const apiToken = await authService.getApiToken();
-			console.log('[Store] Token válido encontrado:', !!apiToken);
+			console.log(
+				'[Store] Token válido encontrado no authService:',
+				!!apiToken
+			);
 
 			// Aguardar um tempo para garantir que o contexto de autenticação seja atualizado
 			await new Promise((resolve) => setTimeout(resolve, 500));
@@ -572,10 +811,10 @@ export default function StorePage() {
 			// Marcar que a verificação de autorização foi concluída
 			setIsAuthorizationChecked(true);
 
-			// Se não há token e não estamos carregando, redirecionar para login
-			if (!apiToken && !authLoading) {
+			// Se não há token em nenhum lugar e não estamos carregando, redirecionar para login
+			if (!apiToken && !tokenStore.hasValidToken() && !authLoading) {
 				console.log(
-					'[StorePage] Usuário não autenticado, redirecionando para login'
+					'[StorePage] Usuário não autenticado e sem token, redirecionando para login'
 				);
 				router.push('/login');
 			}
@@ -743,7 +982,11 @@ export default function StorePage() {
 
 									{/* Indicador de carregamento infinito */}
 									{hasMore && (
-										<div ref={loaderRef} className="flex justify-center py-8">
+										<div
+											ref={loaderRef}
+											key={`loader-${loaderKey}`}
+											className="flex justify-center py-8"
+										>
 											{isLoadingMore && (
 												<div className="flex items-center gap-2 text-gray-500">
 													<span className="animate-spin">

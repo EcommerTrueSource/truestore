@@ -535,9 +535,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 		setAuth({
 			getJwtToken,
 			getApiToken,
-			isAuthenticated: !!user,
+			isAuthenticated: isAuthenticated || tokenStore.hasValidToken(),
 		});
-	}, [getJwtToken, getApiToken, user]);
+	}, [getJwtToken, getApiToken, isAuthenticated]);
 
 	// Adicionar um listener para o evento auth:login-complete
 	useEffect(() => {

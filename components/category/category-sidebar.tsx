@@ -8,15 +8,32 @@ import { cn } from '@/lib/utils';
 import { useCategories } from '@/lib/contexts/categories-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export function CategorySidebar() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const { categories, isLoading, error, reload } = useCategories();
+	const [displayedCategories, setDisplayedCategories] = useState(categories);
+	const initialLoadComplete = useRef(false);
 
 	const currentCategory = searchParams.get('category');
+
+	// Atualizar categorias exibidas apenas quando houver mudanças significativas
+	useEffect(() => {
+		// Se não temos categorias ainda e está carregando, manter estado atual
+		if (categories.length === 0 && isLoading && !initialLoadComplete.current) {
+			return;
+		}
+
+		// Se recebemos novas categorias e não há erro
+		if (categories.length > 0 && !error) {
+			setDisplayedCategories(categories);
+			initialLoadComplete.current = true;
+		}
+	}, [categories, isLoading, error]);
 
 	// Log para debug
 	useEffect(() => {
@@ -34,7 +51,8 @@ export function CategorySidebar() {
 			pathname.includes('/store') &&
 			categories.length === 0 &&
 			!isLoading &&
-			!error
+			!error &&
+			!initialLoadComplete.current
 		) {
 			console.log(
 				'[Sidebar] Forçando carregamento de categorias na página da loja'
@@ -57,7 +75,7 @@ export function CategorySidebar() {
 	};
 
 	// Ordenar categorias por nome (exceto "Todos os produtos" que fica sempre no topo)
-	const sortedCategories = [...categories].sort((a, b) => {
+	const sortedCategories = [...displayedCategories].sort((a, b) => {
 		// "Todos os produtos" sempre primeiro
 		if (a.id === 'all') return -1;
 		if (b.id === 'all') return 1;
@@ -66,7 +84,8 @@ export function CategorySidebar() {
 		return a.name.localeCompare(b.name, 'pt-BR');
 	});
 
-	if (isLoading) {
+	// Renderizar skeletons somente no carregamento inicial
+	if (isLoading && !initialLoadComplete.current) {
 		return (
 			<div className="p-4 space-y-4">
 				<Skeleton className="h-6 w-3/4" />
@@ -80,7 +99,7 @@ export function CategorySidebar() {
 	}
 
 	// Se houver erro, exibir mensagem para o usuário com opção de recarregar
-	if (error) {
+	if (error && displayedCategories.length === 0) {
 		return (
 			<div className="p-4 space-y-4">
 				<div className="flex items-center gap-2 mb-4">
@@ -111,8 +130,8 @@ export function CategorySidebar() {
 		);
 	}
 
-	// Se não houver categorias, exibir mensagem
-	if (categories.length === 0) {
+	// Se não houver categorias e não estiver carregando, exibir mensagem
+	if (displayedCategories.length === 0 && !isLoading) {
 		return (
 			<div className="p-4 space-y-4">
 				<div className="flex items-center gap-2 mb-4">
@@ -144,66 +163,92 @@ export function CategorySidebar() {
 					<ShoppingBag size={18} className="icon-brand" />
 				</div>
 				<h2 className="text-lg font-bold text-brand">Categorias</h2>
+
+				{/* Indicador de carregamento sutil para atualizações */}
+				{isLoading && initialLoadComplete.current && (
+					<div className="ml-auto">
+						<motion.div
+							initial={{ opacity: 0, scale: 0.8 }}
+							animate={{ opacity: 1, scale: 1 }}
+							className="w-5 h-5 rounded-full relative"
+						>
+							<RefreshCw size={16} className="text-brand animate-spin" />
+						</motion.div>
+					</div>
+				)}
 			</div>
 
 			<ScrollArea className="flex-1 pr-2">
 				<nav className="space-y-1 mb-4">
-					{sortedCategories.map((category) => (
-						<button
-							key={category.id}
-							onClick={() => handleCategoryClick(category.id, category.name)}
-							className={cn(
-								'w-full text-left px-4 py-3 rounded-lg transition-all flex items-center gap-3 group',
-								currentCategory === category.id ||
-									(!currentCategory && category.id === 'all')
-									? 'bg-brand-light text-brand-solid font-medium shadow-sm'
-									: 'text-gray-600 hover:bg-gray-50'
-							)}
-						>
-							{currentCategory === category.id ||
-							(!currentCategory && category.id === 'all') ? (
-								<Tag size={16} className="icon-brand" />
-							) : (
-								<Layers
-									size={16}
-									className="text-gray-400 group-hover:text-gray-600 transition-colors"
-								/>
-							)}
-							<span
-								className={cn(
-									'transition-all',
-									(currentCategory === category.id ||
-										(!currentCategory && category.id === 'all')) &&
-										'translate-x-1'
-								)}
+					<AnimatePresence mode="wait">
+						{sortedCategories.map((category) => (
+							<motion.div
+								key={category.id}
+								initial={{ opacity: 0, y: 5 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0, y: -5 }}
+								transition={{ duration: 0.15 }}
 							>
-								{category.name}
-							</span>
-							{category.id !== 'all' && category.itemQuantity !== undefined && (
-								<Badge
-									variant="outline"
+								<button
+									onClick={() =>
+										handleCategoryClick(category.id, category.name)
+									}
 									className={cn(
-										'ml-auto text-xs',
-										currentCategory === category.id
-											? 'bg-brand-light border-brand'
-											: 'bg-gray-50 border-gray-200 text-gray-500'
+										'w-full text-left px-4 py-3 rounded-lg transition-all flex items-center gap-3 group',
+										currentCategory === category.id ||
+											(!currentCategory && category.id === 'all')
+											? 'bg-brand-light text-brand-solid font-medium shadow-sm'
+											: 'text-gray-600 hover:bg-gray-50'
 									)}
 								>
-									{category.itemQuantity}
-								</Badge>
-							)}
-						</button>
-					))}
+									{currentCategory === category.id ||
+									(!currentCategory && category.id === 'all') ? (
+										<Tag size={16} className="icon-brand" />
+									) : (
+										<Layers
+											size={16}
+											className="text-gray-400 group-hover:text-gray-600 transition-colors"
+										/>
+									)}
+									<span
+										className={cn(
+											'transition-all',
+											(currentCategory === category.id ||
+												(!currentCategory && category.id === 'all')) &&
+												'translate-x-1'
+										)}
+									>
+										{category.name}
+									</span>
+									{category.id !== 'all' &&
+										category.itemQuantity !== undefined && (
+											<Badge
+												variant="outline"
+												className={cn(
+													'ml-auto text-xs',
+													currentCategory === category.id
+														? 'bg-brand-light border-brand'
+														: 'bg-gray-50 border-gray-200 text-gray-500'
+												)}
+											>
+												{category.itemQuantity}
+											</Badge>
+										)}
+								</button>
+							</motion.div>
+						))}
+					</AnimatePresence>
 				</nav>
 
 				{/* Elemento decorativo - agora dentro do ScrollArea, logo após as categorias */}
 				<div className="rounded-lg bg-brand-light p-4 border border-gray-100 mb-6">
-					<p className="text-sm font-medium text-gray-600 mb-1">
-						Nossa seleção exclusiva
-					</p>
-					<p className="text-xs text-gray-500">
-						Produtos selecionados especialmente para você.
-					</p>
+					<div className="text-sm text-brand">
+						<p className="font-medium mb-1">Descubra produtos exclusivos</p>
+						<p className="text-xs opacity-80">
+							Navegue por nossas categorias para encontrar produtos exclusivos
+							selecionados para você.
+						</p>
+					</div>
 				</div>
 			</ScrollArea>
 		</aside>

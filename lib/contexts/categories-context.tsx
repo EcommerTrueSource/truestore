@@ -6,6 +6,7 @@ import React, {
 	useState,
 	useEffect,
 	ReactNode,
+	useRef,
 } from 'react';
 import type { Category } from '@/types/category';
 import { fetchCategories } from '@/lib/api';
@@ -18,6 +19,9 @@ export interface CategoriesContextType {
 	error: string | null;
 	reload: () => void;
 }
+
+// Tempo mínimo (em ms) entre carregamentos de categorias
+const LOAD_COOLDOWN = 2000;
 
 const CategoriesContext = createContext<CategoriesContextType>({
 	categories: [],
@@ -41,6 +45,11 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 	const { getJwtToken, isAuthenticated, getApiToken } = useAuth();
 	const [retryCount, setRetryCount] = useState(0);
 
+	// Referências para controle de carregamento
+	const isLoadingRef = useRef(false);
+	const lastLoadTimeRef = useRef(0);
+	const pendingLoadRef = useRef<NodeJS.Timeout | null>(null);
+
 	// Função para carregar categorias que pode ser chamada explicitamente
 	const loadCategories = async (force = false) => {
 		// Verificar se estamos na página de login - não carregar categorias nessa página
@@ -55,12 +64,48 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 			return;
 		}
 
-		// Se não estiver autenticado, não tentar carregar categorias
-		if (!isAuthenticated) {
+		// Verificar a autenticação de forma mais completa, incluindo TokenStore
+		const hasValidToken = tokenStore.hasValidToken();
+		const isUserAuthenticated = isAuthenticated || hasValidToken;
+
+		// Se não estiver autenticado e não tiver token válido, não tentar carregar categorias
+		if (!isUserAuthenticated) {
 			console.log(
-				'[CATEGORIES] Usuário não autenticado, abortando carregamento de categorias'
+				'[CATEGORIES] Usuário não autenticado e sem token válido, abortando carregamento de categorias'
 			);
 			setIsLoading(false);
+			return;
+		}
+
+		// Controle de tempo entre carregamentos para evitar chamadas repetidas
+		const now = Date.now();
+		const timeSinceLastLoad = now - lastLoadTimeRef.current;
+
+		// Se já estiver carregando, não iniciar outro carregamento
+		if (isLoadingRef.current) {
+			console.log(
+				'[CATEGORIES] Carregamento já em andamento, ignorando nova solicitação'
+			);
+			return;
+		}
+
+		// Se houve carregamento recente e não é forçado, agendar para depois
+		if (!force && timeSinceLastLoad < LOAD_COOLDOWN && categories.length > 0) {
+			console.log(
+				`[CATEGORIES] Carregamento muito recente (${timeSinceLastLoad}ms), agendando para mais tarde`
+			);
+
+			// Limpar agendamento anterior se existir
+			if (pendingLoadRef.current) {
+				clearTimeout(pendingLoadRef.current);
+			}
+
+			// Agendar novo carregamento
+			pendingLoadRef.current = setTimeout(() => {
+				pendingLoadRef.current = null;
+				loadCategories(force);
+			}, LOAD_COOLDOWN - timeSinceLastLoad);
+
 			return;
 		}
 
@@ -73,6 +118,9 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 			setIsInitialized(true);
 		}
 
+		// Marcar início do carregamento
+		isLoadingRef.current = true;
+		lastLoadTimeRef.current = now;
 		setIsLoading(true);
 		setError(null);
 
@@ -99,6 +147,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 							console.log('[CATEGORIES] Usando dados do cache local');
 							setCategories(data);
 							setIsLoading(false);
+							isLoadingRef.current = false;
 							return;
 						} else {
 							console.log(
@@ -205,6 +254,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 
 					setRetryCount((prev) => prev + 1);
 					setTimeout(() => {
+						isLoadingRef.current = false;
 						loadCategories(true);
 					}, delayTime);
 
@@ -214,6 +264,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 				console.warn('[CATEGORIES] Nenhum token disponível após 5 tentativas');
 				setError('Token de autenticação não disponível');
 				setIsLoading(false);
+				isLoadingRef.current = false;
 				return;
 			}
 
@@ -273,6 +324,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 			}
 		} finally {
 			setIsLoading(false);
+			isLoadingRef.current = false;
 		}
 	};
 
@@ -281,6 +333,36 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 		console.log('[CategoriesProvider] Recarregando categorias...');
 		setRetryCount(0); // Resetar contagem de tentativas
 		loadCategories(true);
+	};
+
+	// Função de debounce para eventos que disparam carregamento de categorias
+	const debouncedLoadCategories = (force = false) => {
+		// Limpar qualquer agendamento pendente
+		if (pendingLoadRef.current) {
+			clearTimeout(pendingLoadRef.current);
+			pendingLoadRef.current = null;
+		}
+
+		// Se já estiver carregando, não iniciar outro
+		if (isLoadingRef.current) return;
+
+		// Verificar tempo desde último carregamento
+		const timeSinceLastLoad = Date.now() - lastLoadTimeRef.current;
+
+		// Se for muito recente, agendar para depois
+		if (timeSinceLastLoad < LOAD_COOLDOWN && categories.length > 0) {
+			console.log(
+				`[CATEGORIES] Debouncing carregamento (${timeSinceLastLoad}ms desde o último)`
+			);
+			pendingLoadRef.current = setTimeout(() => {
+				pendingLoadRef.current = null;
+				loadCategories(force);
+			}, LOAD_COOLDOWN - timeSinceLastLoad);
+			return;
+		}
+
+		// Caso contrário, carregar imediatamente
+		loadCategories(force);
 	};
 
 	// Listener para evento de autenticação pronta
@@ -314,7 +396,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 				);
 				// Pequeno delay para garantir que tudo está pronto
 				setTimeout(() => {
-					loadCategories();
+					debouncedLoadCategories();
 				}, 100);
 			} else {
 				// Não carregar categorias se o usuário não estiver autenticado
@@ -355,7 +437,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 			);
 			// Delay menor para evitar problemas de concorrência, mas garantir carregamento rápido
 			const timer = setTimeout(() => {
-				loadCategories();
+				debouncedLoadCategories();
 			}, 300);
 
 			return () => clearTimeout(timer);
@@ -398,7 +480,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 							'[CATEGORIES] Token encontrado na segunda tentativa, carregando categorias...'
 						);
 						setIsLoading(true);
-						loadCategories(true); // true = forçar o recarregamento
+						debouncedLoadCategories(true); // usar versão debounced
 					} else {
 						// Se ainda não tiver token, esperar pelo evento auth:state-updated
 						console.log('[CATEGORIES] Aguardando evento auth:state-updated...');
@@ -410,7 +492,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 			// Forçar o carregamento das categorias
 			console.log('[CATEGORIES] Token disponível, carregando categorias...');
 			setIsLoading(true);
-			loadCategories(true); // true = forçar o recarregamento
+			debouncedLoadCategories(true); // usar versão debounced
 		};
 
 		// Adicionar um listener para o evento auth:state-updated
@@ -432,7 +514,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 						'[CATEGORIES] Estado de autenticação atualizado com token disponível, carregando categorias...'
 					);
 					setIsLoading(true);
-					loadCategories(true);
+					debouncedLoadCategories(true); // usar versão debounced
 				}
 			}
 		};

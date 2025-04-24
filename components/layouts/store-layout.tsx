@@ -16,6 +16,7 @@ import { default as UserDropdown } from '../ui/user-dropdown';
 import { useFavorites } from '@/lib/contexts/favorites-context';
 import { useCart } from '@/lib/contexts/cart-context';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { tokenStore } from '@/lib/token-store';
 
 interface StoreLayoutProps {
 	children: React.ReactNode;
@@ -35,10 +36,13 @@ export default function StoreLayout({
 
 	// Verificar autenticação e redirecionar para login se necessário
 	useEffect(() => {
-		// Aguardar carregamento inicial da autenticação
-		if (!isLoading && !isAuthenticated) {
+		// Verificação mais completa da autenticação incluindo o TokenStore
+		const hasValidToken = tokenStore.hasValidToken();
+
+		// Aguardar carregamento inicial da autenticação e verificar também o token
+		if (!isLoading && !isAuthenticated && !hasValidToken) {
 			console.log(
-				'[StoreLayout] Usuário não autenticado, redirecionando para login'
+				'[StoreLayout] Usuário não autenticado e sem token válido, redirecionando para login'
 			);
 			router.push('/login');
 		}
