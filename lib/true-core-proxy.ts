@@ -475,10 +475,230 @@ export const TrueCore = {
   },
 
   /**
+   * Extrai o ID do Clerk do token
+   */
+  async extractClerkIdFromToken(token: string): Promise<string | null> {
+    try {
+      // Decodificar o token para obter o ID do Clerk
+      // Assumindo que o token JWT tem uma estrutura padrão
+      const payload = token.split('.')[1];
+      if (!payload) return null;
+      
+      const decodedPayload = Buffer.from(payload, 'base64').toString('utf-8');
+      const data = JSON.parse(decodedPayload);
+      
+      // Verificar o formato específico do token e extrair o ID do usuário
+      if (data.sub) {
+        // Importante: o sub pode ter formato user_XYZ ou apenas o valor numérico
+        // Se for user_XYZ, devemos retornar o valor completo
+        return data.sub.toString();
+      }
+      
+      console.log('[TrueCore] Conteúdo do token decodificado:', JSON.stringify(data));
+      return null;
+    } catch (error) {
+      console.error('[TrueCore] Erro ao extrair ID do Clerk do token:', error);
+      console.error('[TrueCore] Detalhes completos do erro:', error);
+      return null;
+    }
+  },
+
+  /**
    * Manipulador específico para o endpoint de produtos
    */
   async handleProducts(request: NextRequest): Promise<NextResponse> {
-    return this.handleRequest(request, '/marketing/products');
+    try {
+      console.log('[TrueCore] Processando requisição de produtos');
+      
+      // Obter a URL base da API True Core
+      const baseUrl = this.getApiUrl();
+      
+      if (!baseUrl) {
+        console.error('[TrueCore] URL da API não configurada para produtos');
+        return NextResponse.json(
+          { error: 'URL da API True Core não configurada' },
+          { status: 500 }
+        );
+      }
+
+      // Obter o token
+      const token = this.extractToken(request);
+      
+      if (!token) {
+        console.error('[TrueCore] Token de autenticação não encontrado para produtos');
+        return NextResponse.json(
+          { error: 'Token de autenticação não encontrado' },
+          { status: 401 }
+        );
+      }
+
+      // Copiar os parâmetros de consulta da requisição original para um objeto URLSearchParams
+      const searchParams = new URLSearchParams(request.nextUrl.searchParams.toString());
+      
+      // Log para depuração dos parâmetros originais
+      console.log('[TrueCore] Parâmetros de busca originais:');
+      for (const [key, value] of searchParams.entries()) {
+        console.log(`[TrueCore] - ${key}: ${value}`);
+      }
+      
+      // Adicionar filtros padrão
+      searchParams.set('inStock', 'true');
+      searchParams.set('active', 'true');
+      
+      // Tentar obter o ID do Clerk dos headers diretamente
+      let clerkId = request.headers.get('x-clerk-user-id');
+      if (clerkId) {
+        console.log(`[TrueCore] ID do Clerk obtido do header: ${clerkId}`);
+      } else {
+        // Se não encontramos nos headers, tentar extrair do token
+        try {
+          const payload = token.split('.')[1];
+          if (payload) {
+            const decodedPayload = Buffer.from(payload, 'base64').toString('utf-8');
+            const data = JSON.parse(decodedPayload);
+            console.log('[TrueCore] Token payload:', JSON.stringify(data));
+            
+            // Verificar externalId/sub no token
+            if (data.externalId) {
+              clerkId = data.externalId;
+              console.log(`[TrueCore] ID do Clerk extraído do token (externalId): ${clerkId}`);
+            } else if (data.sub) {
+              clerkId = data.sub;
+              console.log(`[TrueCore] ID do Clerk extraído do token (sub): ${clerkId}`);
+            }
+          }
+        } catch (e) {
+          console.error('[TrueCore] Erro ao decodificar token:', e);
+        }
+      }
+      
+      // Verificar se temos informações do usuário logado para determinar a categoria
+      let warehouseName = '';
+      
+      // Se temos um ID do Clerk, tentar obter as informações do cliente
+      if (clerkId) {
+        try {
+          // Usar a API unificada de clientes por clerk ID que resolve os problemas de ID
+          // IMPORTANTE: Esta rota interna já lida com o formato correto do ID do Clerk
+          const customerUrl = `/api/customers/clerk/${clerkId}`;
+          console.log(`[TrueCore] Buscando cliente pela rota unificada: ${customerUrl}`);
+          
+          const customerResponse = await fetch(customerUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            credentials: 'include',
+            cache: 'no-store'
+          });
+          
+          if (customerResponse.ok) {
+            const customer = await customerResponse.json();
+            
+            if (customer && customer.__category__) {
+              const categoryName = customer.__category__.name;
+              console.log(`[TrueCore] Categoria do cliente: ${categoryName}`);
+              
+              // Definir o warehouseName com base na categoria do cliente - exatamente como esperado pela API
+              if (categoryName.includes('Creator')) {
+                warehouseName = 'MKT-Creator';
+                console.log(`[TrueCore] Cliente da categoria Creator, usando warehouse: ${warehouseName}`);
+              } else if (categoryName.includes('Top Master')) {
+                warehouseName = 'MKT-Top Master';
+                console.log(`[TrueCore] Cliente da categoria Top Master, usando warehouse: ${warehouseName}`);
+              } else {
+                // Categoria padrão para outros tipos
+                warehouseName = 'geral';
+                console.log(`[TrueCore] Outra categoria de cliente, usando warehouse: ${warehouseName}`);
+              }
+              
+              // Aplicar o filtro de warehouse
+              if (warehouseName) {
+                searchParams.set('warehouseName', warehouseName);
+              }
+            } else {
+              console.log('[TrueCore] Cliente encontrado, mas sem categoria definida');
+            }
+          } else {
+            console.error('[TrueCore] Erro ao buscar cliente:', customerResponse.status);
+            
+            // Tentar obter mais detalhes sobre o erro
+            try {
+              const errorText = await customerResponse.text();
+              console.error('[TrueCore] Resposta de erro do cliente:', errorText);
+            } catch (e) {
+              console.error('[TrueCore] Não foi possível ler resposta de erro do cliente');
+            }
+          }
+        } catch (error) {
+          console.error('[TrueCore] Erro ao processar informações do cliente:', error);
+        }
+      } else {
+        console.log('[TrueCore] Não foi possível identificar o ID do Clerk, usando filtros padrão');
+      }
+      
+      // Log de parâmetros finais
+      console.log('[TrueCore] Parâmetros de busca após aplicar filtros:');
+      for (const [key, value] of searchParams.entries()) {
+        console.log(`[TrueCore] - ${key}: ${value}`);
+      }
+      
+      // Construir a URL completa para a API True Core
+      // Usar o endpoint warehouse/search quando temos o parâmetro warehouseName
+      const endpoint = warehouseName 
+        ? '/marketing/products/warehouse/search' 
+        : '/marketing/products';
+        
+      console.log(`[TrueCore] Usando endpoint: ${endpoint}`);
+      
+      const url = `${baseUrl}${endpoint}?${searchParams.toString()}`;
+      console.log(`[TrueCore] Fazendo requisição para: ${url}`);
+      
+      // Fazer a requisição para a API True Core
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        cache: 'no-store'
+      });
+
+      // Se a resposta não for ok, retornar o erro
+      if (!response.ok) {
+        const status = response.status;
+        
+        try {
+          const errorData = await response.json();
+          console.error('[TrueCore] Erro da API True Core:', errorData);
+          return NextResponse.json(errorData, { status });
+        } catch {
+          return NextResponse.json(
+            { error: `Erro ao acessar API True Core: /marketing/products` },
+            { status }
+          );
+        }
+      }
+
+      // Tentar obter a resposta como JSON
+      const data = await response.json();
+      
+      // Log de informações sobre os produtos obtidos
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`[TrueCore] ${data.data.length} produtos obtidos com sucesso`);
+      }
+      
+      return NextResponse.json(data);
+    } catch (error) {
+      console.error(`[TrueCore] Erro na obtenção de produtos:`, error);
+      return NextResponse.json(
+        { error: 'Erro interno ao processar requisição de produtos' },
+        { status: 500 }
+      );
+    }
   },
 
   /**
@@ -611,6 +831,208 @@ export const TrueCore = {
       console.error('[TrueCore] Erro ao processar categorias:', error);
       return NextResponse.json(
         { error: 'Erro interno ao processar requisição de categorias' },
+        { status: 500 }
+      );
+    }
+  },
+
+  /**
+   * Manipulador específico para obter cliente pelo ID do Clerk
+   * @param request Requisição Next.js 
+   * @param clerkId ID do usuário no Clerk
+   */
+  async handleCustomerByClerkId(request: NextRequest, clerkId: string): Promise<NextResponse> {
+    try {
+      // Garantir que estamos usando o ID completo
+      const cleanClerkId = clerkId.trim();
+      
+      if (!cleanClerkId) {
+        console.error('[TrueCore] ID do Clerk inválido ou vazio');
+        return NextResponse.json(
+          { error: 'ID do Clerk inválido ou vazio' },
+          { status: 400 }
+        );
+      }
+      
+      console.log(`[TrueCore] Buscando cliente pelo ID do Clerk: ${cleanClerkId}`);
+      
+      // Obter token de autorização
+      const token = this.extractToken(request);
+      if (!token) {
+        console.error('[TrueCore] Token não fornecido para busca de cliente');
+        return NextResponse.json(
+          { error: 'Token de autenticação não encontrado' },
+          { status: 401 }
+        );
+      }
+      
+      // Obter URL base da API
+      const baseUrl = this.getApiUrl();
+      if (!baseUrl) {
+        console.error('[TrueCore] URL da API não configurada');
+        return NextResponse.json(
+          { error: 'URL da API não configurada' },
+          { status: 500 }
+        );
+      }
+      
+      // Construir URL completa para o endpoint de cliente por ID do Clerk
+      const url = `${baseUrl}/marketing/customers/byClerkId/${cleanClerkId}`;
+      console.log(`[TrueCore] Fazendo requisição para: ${url}`);
+      
+      // Fazer a chamada direta para a API True Core
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        cache: 'no-store'
+      });
+      
+      console.log(`[TrueCore] Status da resposta: ${response.status} ${response.statusText}`);
+      
+      // Se a resposta não for OK, retornar o erro
+      if (!response.ok) {
+        const status = response.status;
+        console.error(`[TrueCore] Erro ao buscar cliente: status ${status}`);
+        
+        try {
+          const errorData = await response.json();
+          console.error('[TrueCore] Detalhes do erro:', JSON.stringify(errorData));
+          return NextResponse.json(errorData, { status });
+        } catch (e) {
+          console.error('[TrueCore] Não foi possível obter detalhes do erro:', e);
+          
+          // Tentar obter o texto da resposta
+          try {
+            const errorText = await response.text();
+            console.error('[TrueCore] Texto da resposta de erro:', errorText);
+          } catch (textError) {
+            console.error('[TrueCore] Não foi possível ler o texto da resposta de erro');
+          }
+          
+          return NextResponse.json(
+            { error: `Erro ao buscar cliente da API True Core: ${status}` },
+            { status }
+          );
+        }
+      }
+      
+      // Obter os dados da resposta
+      const responseText = await response.text();
+      console.log(`[TrueCore] Resposta bruta: ${responseText.substring(0, 200)}...`);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('[TrueCore] Erro ao fazer parse da resposta JSON:', e);
+        return NextResponse.json(
+          { error: 'Formato de resposta inválido - não foi possível fazer parse do JSON' },
+          { status: 500 }
+        );
+      }
+      
+      console.log(`[TrueCore] Cliente encontrado: ${data.name} (ID: ${data.id})`);
+      
+      return NextResponse.json(data);
+    } catch (error) {
+      console.error('[TrueCore] Erro ao processar busca de cliente:', error);
+      return NextResponse.json(
+        { error: 'Erro interno ao processar requisição de cliente' },
+        { status: 500 }
+      );
+    }
+  },
+
+  /**
+   * Manipulador específico para obter os limites de pedidos de um cliente
+   * @param request Requisição Next.js 
+   * @param customerId ID do cliente no True Core
+   */
+  async handleCustomerOrderLimits(request: NextRequest, customerId: string): Promise<NextResponse> {
+    try {
+      console.log(`[TrueCore] Buscando limites de pedidos do cliente: ${customerId}`);
+      
+      // Obter token de autorização
+      const token = this.extractToken(request);
+      if (!token) {
+        console.error('[TrueCore] Token não fornecido para busca de limites');
+        return NextResponse.json(
+          { error: 'Token de autenticação não encontrado' },
+          { status: 401 }
+        );
+      }
+      
+      // Obter URL base da API
+      const baseUrl = this.getApiUrl();
+      if (!baseUrl) {
+        console.error('[TrueCore] URL da API não configurada');
+        return NextResponse.json(
+          { error: 'URL da API não configurada' },
+          { status: 500 }
+        );
+      }
+      
+      // Construir URL completa para o endpoint de limites de pedidos
+      const url = `${baseUrl}/marketing/customers/${customerId}/order-limits`;
+      console.log(`[TrueCore] Fazendo requisição para: ${url}`);
+      
+      // Fazer a chamada direta para a API True Core
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        cache: 'no-store'
+      });
+      
+      console.log(`[TrueCore] Status da resposta: ${response.status} ${response.statusText}`);
+      
+      // Se a resposta não for OK, retornar o erro
+      if (!response.ok) {
+        const status = response.status;
+        console.error(`[TrueCore] Erro ao buscar limites: status ${status}`);
+        
+        try {
+          const errorData = await response.json();
+          console.error('[TrueCore] Detalhes do erro:', JSON.stringify(errorData));
+          return NextResponse.json(errorData, { status });
+        } catch (e) {
+          console.error('[TrueCore] Não foi possível obter detalhes do erro:', e);
+          return NextResponse.json(
+            { error: `Erro ao buscar limites da API True Core: ${status}` },
+            { status }
+          );
+        }
+      }
+      
+      // Obter os dados da resposta
+      const responseText = await response.text();
+      console.log(`[TrueCore] Resposta bruta: ${responseText.substring(0, 200)}...`);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('[TrueCore] Erro ao fazer parse da resposta JSON:', e);
+        return NextResponse.json(
+          { error: 'Formato de resposta inválido - não foi possível fazer parse do JSON' },
+          { status: 500 }
+        );
+      }
+      
+      console.log(`[TrueCore] Limites de pedidos encontrados para cliente: ${data.customer?.name}`);
+      
+      return NextResponse.json(data);
+    } catch (error) {
+      console.error('[TrueCore] Erro ao processar busca de limites:', error);
+      return NextResponse.json(
+        { error: 'Erro interno ao processar requisição de limites' },
         { status: 500 }
       );
     }

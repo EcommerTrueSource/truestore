@@ -10,6 +10,7 @@ import { CartProvider } from '@/lib/contexts/cart-context';
 import { NotificationsProvider } from '@/lib/contexts/notifications-context';
 import { AuthProvider } from '@/lib/contexts/auth-context';
 import { CategoriesProvider } from '@/lib/contexts/categories-context';
+import { CustomerProvider } from '@/lib/contexts/customer-context';
 
 const inter = Inter({
 	subsets: ['latin'],
@@ -44,9 +45,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
 	children,
-}: Readonly<{
+}: {
 	children: React.ReactNode;
-}>) {
+}) {
 	return (
 		<ClerkProvider>
 			<html lang="pt-BR" suppressHydrationWarning>
@@ -55,26 +56,26 @@ export default function RootLayout({
 					<meta name="robots" content="noindex, nofollow" />
 					<meta name="googlebot" content="noindex, nofollow, noarchive" />
 				</head>
-				<body
-					className={`min-h-screen bg-background font-sans antialiased ${inter.variable}`}
-				>
+				<body className={inter.className}>
+					<Toaster />
 					<ThemeProvider
 						attribute="class"
 						defaultTheme="light"
-						enableSystem
+						enableSystem={false}
 						disableTransitionOnChange
 					>
 						<AuthProvider>
-							<FavoritesProvider>
+							<NotificationsProvider>
 								<CartProvider>
-									<CategoriesProvider>
-										<NotificationsProvider>{children}</NotificationsProvider>
-									</CategoriesProvider>
+									<FavoritesProvider>
+										<CategoriesProvider>
+											<CustomerProvider>{children}</CustomerProvider>
+										</CategoriesProvider>
+									</FavoritesProvider>
 								</CartProvider>
-							</FavoritesProvider>
+							</NotificationsProvider>
 						</AuthProvider>
 					</ThemeProvider>
-					<Toaster />
 				</body>
 			</html>
 		</ClerkProvider>

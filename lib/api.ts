@@ -6,6 +6,7 @@ import type { CartItem } from "@/types/cart"
 import { ApiService } from "./services/api-service"
 import { useApi } from '@/hooks/use-api';
 import { tokenStore } from './token-store';
+import { Customer } from '@/types/customer';
 
 
 // Flag para usar API real ou dados mockados - sempre verdadeiro
@@ -688,5 +689,61 @@ export async function searchProducts({
   } catch (error) {
     console.error('[API] Erro ao realizar busca avançada de produtos:', error);
     throw error; // Propagar o erro para ser tratado pelo componente
+  }
+}
+
+/**
+ * Busca os dados do cliente pelo ID do Clerk
+ * @param clerkId ID do usuário no Clerk
+ * @param jwtToken Token de autenticação opcional
+ * @returns Objeto com os dados do cliente
+ */
+export async function fetchCustomerByClerkId(
+  clerkId: string,
+  jwtToken?: string
+): Promise<Customer | null> {
+  try {
+    console.log(`[API] Buscando cliente pelo ID do Clerk: ${clerkId}`);
+    
+    const url = `/api/customers/clerk/${clerkId}`;
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (jwtToken) {
+      headers['Authorization'] = `Bearer ${jwtToken}`;
+    }
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      const statusCode = response.status;
+      const errorData = await response.json().catch(() => ({}));
+      
+      console.error(`[API] Erro ao buscar cliente: ${statusCode}`, errorData);
+      
+      // Se o cliente não for encontrado, retornamos null em vez de lançar erro
+      if (statusCode === 404) {
+        console.log('[API] Cliente não encontrado');
+        return null;
+      }
+      
+      throw new Error(
+        errorData.error || errorData.message || `Erro ao buscar cliente: ${statusCode}`
+      );
+    }
+    
+    const customer = await response.json();
+    console.log(`[API] Cliente encontrado: ${customer.name}`);
+    
+    return customer;
+  } catch (error) {
+    console.error('[API] Erro ao buscar cliente:', error);
+    throw error;
   }
 }

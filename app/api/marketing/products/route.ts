@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { TrueCore } from '@/lib/true-core-proxy';
 
 /**
  * Extrai o token True Core dos cookies da requisição ou do cabeçalho Authorization
@@ -16,6 +17,115 @@ function extractToken(request: NextRequest): string | null {
   
   console.log('[Products API] Nenhum token encontrado na requisição');
   return null;
+}
+
+/**
+ * Extrai o ID do Clerk do token ou dos headers
+ */
+async function extractClerkIdFromToken(request: NextRequest, token: string): Promise<string | null> {
+  try {
+    // Primeiro, verificar se temos o ID nos headers do Clerk
+    const clerkUserId = request.headers.get('x-clerk-user-id');
+    if (clerkUserId) {
+      console.log(`[Products API] ID do Clerk obtido do header: ${clerkUserId}`);
+      return clerkUserId;
+    }
+    
+    // Se não encontramos no header, tentar extrair do token
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    
+    const decodedPayload = Buffer.from(payload, 'base64').toString('utf-8');
+    const data = JSON.parse(decodedPayload);
+    
+    console.log('[Products API] Payload do token JWT:', JSON.stringify(data));
+    
+    // Verificar se temos a chave sub no token (que contém o ID do usuário)
+    if (data.sub) {
+      // O sub pode ser o ID numérico ou o ID completo com prefixo
+      return data.sub.toString();
+    }
+    
+    // Se não encontramos no token, verificar se temos informações no cookie
+    const clerkJWT = request.cookies.get('__clerk_jwt')?.value;
+    if (clerkJWT) {
+      try {
+        const clerkPayload = clerkJWT.split('.')[1];
+        if (clerkPayload) {
+          const clerkData = JSON.parse(Buffer.from(clerkPayload, 'base64').toString('utf-8'));
+          if (clerkData.sub) {
+            console.log(`[Products API] ID do Clerk obtido do cookie __clerk_jwt: ${clerkData.sub}`);
+            return clerkData.sub;
+          }
+        }
+      } catch (e) {
+        console.error('[Products API] Erro ao extrair ID do cookie do Clerk:', e);
+      }
+    }
+    
+    console.log('[Products API] Não foi possível encontrar o ID do Clerk no token ou headers');
+    return null;
+  } catch (error) {
+    console.error('[Products API] Erro ao extrair ID do Clerk:', error);
+    console.error('[Products API] Detalhes do erro:', error);
+    return null;
+  }
+}
+
+/**
+ * Obtém os dados do cliente diretamente do True Core
+ */
+async function getCustomerCategory(clerkId: string, token: string, apiUrl: string): Promise<string | null> {
+  try {
+    // Garantir que estamos usando o ID completo
+    const cleanClerkId = clerkId.trim();
+    
+    if (!cleanClerkId) {
+      console.error('[Products API] ID do Clerk inválido ou vazio');
+      return null;
+    }
+    
+    const baseUrl = apiUrl.replace('/api', '');
+    const url = `${baseUrl}/marketing/customers/byClerkId/${cleanClerkId}`;
+    console.log(`[Products API] Buscando informações do cliente: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      console.error(`[Products API] Erro ao buscar cliente: ${response.status}`);
+      
+      // Registrar mais detalhes sobre o erro para diagnóstico
+      try {
+        const errorText = await response.text();
+        console.error('[Products API] Resposta de erro:', errorText);
+      } catch (e) {
+        console.error('[Products API] Não foi possível ler resposta de erro');
+      }
+      
+      return null;
+    }
+    
+    const customer = await response.json();
+    
+    if (customer && customer.__category__) {
+      console.log(`[Products API] Categoria do cliente encontrada: ${customer.__category__.name}`);
+      return customer.__category__.name;
+    }
+    
+    console.log('[Products API] Cliente encontrado, mas sem categoria definida');
+    return null;
+  } catch (error) {
+    console.error('[Products API] Erro ao buscar cliente:', error);
+    return null;
+  }
 }
 
 /**
@@ -52,14 +162,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Copiar os parâmetros de consulta da requisição original
-    const searchParams = request.nextUrl.searchParams;
+    // Copiar os parâmetros de consulta da requisição original para um objeto URLSearchParams
+    const searchParams = new URLSearchParams(request.nextUrl.searchParams.toString());
     
-    // Log para depuração dos parâmetros, especialmente de categoria
-    console.log('[Products API] Parâmetros de busca:');
-    searchParams.forEach((value, key) => {
+    // Log para depuração dos parâmetros originais
+    console.log('[Products API] Parâmetros de busca originais:');
+    for (const [key, value] of searchParams.entries()) {
       console.log(`[Products API] - ${key}: ${value}`);
-    });
+    }
     
     // Verificar especificamente o filtro de categoria
     const categoryId = searchParams.get('categoryId');
@@ -69,9 +179,119 @@ export async function GET(request: NextRequest) {
       console.log('[Products API] Sem filtro de categoria aplicado');
     }
     
+    // Adicionar filtros padrão
+    searchParams.set('inStock', 'true');
+    searchParams.set('active', 'true');
+    
+    // Tentar obter o ID do Clerk dos headers diretamente
+    let clerkId = request.headers.get('x-clerk-user-id');
+    if (clerkId) {
+      console.log(`[Products API] ID do Clerk obtido do header: ${clerkId}`);
+    } else {
+      // Se não encontramos nos headers, tentar extrair do token
+      try {
+        const payload = token.split('.')[1];
+        if (payload) {
+          const decodedPayload = Buffer.from(payload, 'base64').toString('utf-8');
+          const data = JSON.parse(decodedPayload);
+          console.log('[Products API] Payload do token JWT:', JSON.stringify(data));
+          
+          // Verificar externalId/sub no token
+          if (data.externalId) {
+            clerkId = data.externalId;
+            console.log(`[Products API] ID do Clerk extraído do token (externalId): ${clerkId}`);
+          } else if (data.sub) {
+            clerkId = data.sub;
+            console.log(`[Products API] ID do Clerk extraído do token (sub): ${clerkId}`);
+          }
+        }
+      } catch (e) {
+        console.error('[Products API] Erro ao decodificar token:', e);
+      }
+    }
+    
+    // Verificar se temos informações do usuário logado para determinar a categoria
+    let warehouseName = '';
+    
+    // Vamos usar diretamente a rota unificada do cliente para buscar a categoria
+    if (clerkId) {
+      try {
+        // IMPORTANTE: Obter a origem de forma dinâmica para funcionar em qualquer ambiente
+        const host = request.headers.get('host') || 'localhost:3000';
+        const protocol = host.includes('localhost') ? 'http' : 
+                        (request.headers.get('x-forwarded-proto') || 'https');
+        const origin = `${protocol}://${host}`;
+        
+        const customerUrl = `${origin}/api/customers/clerk/${clerkId}`;
+        console.log(`[Products API] Buscando cliente pela rota unificada: ${customerUrl}`);
+        
+        const response = await fetch(customerUrl, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        
+        if (response.ok) {
+          const customer = await response.json();
+          
+          if (customer && customer.__category__) {
+            const categoryName = customer.__category__.name;
+            console.log(`[Products API] Categoria do cliente: ${categoryName}`);
+            
+            // Definir o warehouseName com base na categoria do cliente - exatamente como esperado pela API
+            if (categoryName.includes('Creator')) {
+              warehouseName = 'MKT-Creator';
+              console.log(`[Products API] Cliente da categoria Creator, usando warehouse: ${warehouseName}`);
+            } else if (categoryName.includes('Top Master')) {
+              warehouseName = 'MKT-Top Master';
+              console.log(`[Products API] Cliente da categoria Top Master, usando warehouse: ${warehouseName}`);
+            } else {
+              // Categoria padrão para outros tipos
+              warehouseName = 'geral';
+              console.log(`[Products API] Outra categoria de cliente, usando warehouse: ${warehouseName}`);
+            }
+            
+            // Aplicar o filtro de warehouse
+            if (warehouseName) {
+              searchParams.set('warehouseName', warehouseName);
+            }
+          } else {
+            console.log('[Products API] Cliente encontrado, mas sem categoria definida');
+          }
+        } else {
+          console.error(`[Products API] Erro ao buscar cliente: ${response.status}`);
+          try {
+            const errorData = await response.text();
+            console.error('[Products API] Resposta de erro:', errorData);
+          } catch (e) {
+            console.error('[Products API] Não foi possível ler resposta de erro');
+          }
+        }
+      } catch (error) {
+        console.error('[Products API] Erro ao buscar cliente:', error);
+      }
+    }
+    
+    console.log('[Products API] Parâmetros de busca após aplicar filtros:');
+    for (const [key, value] of searchParams.entries()) {
+      console.log(`[Products API] - ${key}: ${value}`);
+    }
+    
     // Construir a URL para a API True Core
     const baseUrl = apiUrl.replace('/api', '');
-    const url = `${baseUrl}/marketing/products?${searchParams.toString()}`;
+    
+    // Definir o endpoint baseado na disponibilidade do warehouse
+    // Se temos um warehouse, SEMPRE usar o endpoint warehouse/search
+    const endpoint = warehouseName 
+      ? '/marketing/products/warehouse/search' 
+      : '/marketing/products';
+      
+    console.log(`[Products API] Usando endpoint: ${endpoint}`);
+    
+    const url = `${baseUrl}${endpoint}?${searchParams.toString()}`;
     console.log(`[Products API] Fazendo requisição para: ${url}`);
     
     // Fazer a requisição para a API True Core com o token
@@ -81,7 +301,6 @@ export async function GET(request: NextRequest) {
     headers.append('Authorization', `Bearer ${token}`);
     
     console.log(`[Products API] Enviando token: ${token.substring(0, 20)}...`);
-    console.log(`[Products API] Authorization header: Bearer ${token.substring(0, 20)}...`);
     
     // Tentativa direta, sem fetch API
     const response = await fetch(url, {
@@ -111,7 +330,7 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
     console.log(`[Products API] Produtos obtidos com sucesso: ${data?.data?.length || 0} itens`);
     
-    // Filtrar produtos por categoria usando o campo description
+    // Filtrar produtos apenas se necessário (alguns endpoints já retornam filtrados)
     if (categoryId && categoryId !== 'all' && data?.data) {
       console.log(`[Products API] Aplicando filtro adicional por categoria ID: ${categoryId}`);
       
@@ -154,14 +373,6 @@ export async function GET(request: NextRequest) {
       } else {
         console.log('[Products API] Nenhum produto corresponde aos critérios de filtro da categoria');
       }
-    }
-    
-    // Log adicional para depurar se os resultados estão sendo filtrados corretamente
-    if (categoryId && data?.data) {
-      const productCategories = [...new Set(data.data.map((p: any) => p.categoryId))];
-      console.log(`[Products API] IDs de categorias nos produtos retornados: ${productCategories.join(', ')}`);
-      const matchingProducts = data.data.filter((p: any) => p.categoryId === categoryId);
-      console.log(`[Products API] ${matchingProducts.length} de ${data.data.length} produtos correspondem exatamente ao filtro de categoria ${categoryId}`);
     }
     
     return NextResponse.json(data);

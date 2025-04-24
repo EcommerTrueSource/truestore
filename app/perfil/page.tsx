@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/lib/contexts/auth-context';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useClerk } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,6 +40,8 @@ import {
 	Store,
 	X,
 	Upload,
+	ShoppingCart,
+	Heart,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -55,6 +57,7 @@ import {
 	DialogFooter,
 } from '@/components/ui/dialog';
 import StoreLayout from '@/components/layouts/store-layout';
+import CustomerCategoryInfo from '@/components/customer/customer-category-info';
 
 // Definindo interface para o perfil de usuário
 interface ProfileData {
@@ -132,6 +135,7 @@ function StatusBadge({ status }: { status: 'verified' | 'pending' | 'error' }) {
 export default function PerfilPage() {
 	const { user, isLoading } = useAuth();
 	const { user: clerkUser, isLoaded } = useUser();
+	const clerk = useClerk();
 	const { toast } = useToast();
 	const [isSaving, setIsSaving] = useState(false);
 	const [isEditingPhoto, setIsEditingPhoto] = useState(false);
@@ -139,20 +143,33 @@ export default function PerfilPage() {
 	const [activeTab, setActiveTab] = useState('perfil');
 	const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 	const [emailUpdates, setEmailUpdates] = useState(true);
+	const [currentPassword, setCurrentPassword] = useState('');
+	const [newPassword, setNewPassword] = useState('');
+	const [confirmPassword, setConfirmPassword] = useState('');
+	const [passwordError, setPasswordError] = useState<string | null>(null);
+	const [isChangingPassword, setIsChangingPassword] = useState(false);
+	// Estado para controlar a renderização no cliente
+	const [isMounted, setIsMounted] = useState(false);
+
+	// Efeito para garantir que o componente só seja totalmente renderizado no cliente
+	useEffect(() => {
+		setIsMounted(true);
+	}, []);
 
 	// Formatação da data
 	const formatDate = (dateString: string) => {
 		if (!dateString) return '';
 
 		try {
+			// Usando um formato fixo para garantir consistência entre servidor e cliente
 			const date = new Date(dateString);
-			return new Intl.DateTimeFormat('pt-BR', {
-				day: '2-digit',
-				month: '2-digit',
-				year: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit',
-			}).format(date);
+			const day = String(date.getDate()).padStart(2, '0');
+			const month = String(date.getMonth() + 1).padStart(2, '0');
+			const year = date.getFullYear();
+			const hours = String(date.getHours()).padStart(2, '0');
+			const minutes = String(date.getMinutes()).padStart(2, '0');
+
+			return `${day}/${month}/${year}, ${hours}:${minutes}`;
 		} catch (error) {
 			console.error('Erro ao formatar data:', error);
 			return '';
@@ -205,7 +222,7 @@ export default function PerfilPage() {
 
 	// Salvar alteração de foto
 	const savePhotoChange = useCallback(async () => {
-		if (!profilePhoto || !clerkUser) {
+		if (!profilePhoto || !clerk.user) {
 			toast({
 				variant: 'destructive',
 				title: 'Erro',
@@ -222,7 +239,7 @@ export default function PerfilPage() {
 			const blob = await response.blob();
 
 			// Upload para o Clerk usando a API oficial
-			await clerkUser.setProfileImage({ file: blob });
+			await clerk.user.setProfileImage({ file: blob });
 
 			toast({
 				title: 'Foto atualizada',
@@ -240,9 +257,83 @@ export default function PerfilPage() {
 		} finally {
 			setIsSaving(false);
 		}
-	}, [profilePhoto, clerkUser, toast, closePhotoModal]);
+	}, [profilePhoto, clerk.user, toast, closePhotoModal]);
 
-	if (!isLoaded || isLoading) {
+	// Manipulador para alteração de senha
+	const handlePasswordChange = useCallback(async () => {
+		if (!clerk.user) return;
+
+		if (newPassword !== confirmPassword) {
+			setPasswordError('As senhas não coincidem');
+			return;
+		}
+
+		if (newPassword.length < 8) {
+			setPasswordError('A senha deve ter pelo menos 8 caracteres');
+			return;
+		}
+
+		setPasswordError(null);
+		setIsChangingPassword(true);
+
+		try {
+			// Método padrão para atualização de senha
+			await clerk.user.updatePassword({
+				currentPassword,
+				newPassword,
+			});
+
+			setCurrentPassword('');
+			setNewPassword('');
+			setConfirmPassword('');
+
+			toast({
+				title: 'Senha alterada',
+				description: 'Sua senha foi atualizada com sucesso.',
+			});
+		} catch (error: any) {
+			console.error('Erro ao alterar senha:', error);
+
+			// Tratamento de erros específicos
+			if (error.errors && error.errors.length > 0) {
+				if (error.errors[0].code === 'form_password_incorrect') {
+					setPasswordError('Senha atual incorreta');
+				} else if (error.errors[0].code === 'form_password_pwned') {
+					setPasswordError(
+						'Esta senha é muito fraca ou foi comprometida. Por favor, escolha uma senha mais segura.'
+					);
+				} else if (error.errors[0].code === 'session_reverification_required') {
+					// Redirecionar para a página de login com retorno
+					setPasswordError(
+						'Sessão expirada. Por favor, faça login novamente para alterar sua senha.'
+					);
+					setTimeout(() => {
+						window.location.href = `/login?redirect=${encodeURIComponent(
+							window.location.pathname
+						)}`;
+					}, 2000);
+					return;
+				} else {
+					setPasswordError(
+						error.errors[0].message || 'Ocorreu um erro ao alterar a senha'
+					);
+				}
+			} else {
+				setPasswordError('Ocorreu um erro ao alterar a senha');
+			}
+
+			toast({
+				variant: 'destructive',
+				title: 'Erro ao alterar senha',
+				description: 'Não foi possível alterar sua senha. Tente novamente.',
+			});
+		} finally {
+			setIsChangingPassword(false);
+		}
+	}, [clerk.user, currentPassword, newPassword, confirmPassword, toast]);
+
+	// Retorno de loading enquanto não está carregado ou não está montado no cliente
+	if (!isLoaded || isLoading || !isMounted) {
 		return (
 			<div className="flex justify-center items-center min-h-[50vh]">
 				<div className="relative">
@@ -350,13 +441,14 @@ export default function PerfilPage() {
 										initial="hidden"
 										animate="visible"
 										exit={{ opacity: 0 }}
-										className="grid md:grid-cols-[1fr_2fr] gap-8"
+										className="grid md:grid-cols-[1fr_1fr] gap-8"
 									>
+										{/* Card com foto e informações básicas */}
 										<motion.div
 											variants={slideUp}
-											className="flex flex-col items-center bg-white/70 backdrop-blur-md p-6 rounded-xl border border-gray-100/60 shadow-lg"
+											className="flex flex-col items-center justify-center bg-white/70 backdrop-blur-md p-6 rounded-xl border border-gray-100/60 shadow-lg"
 										>
-											<div className="relative mb-6 group">
+											<div className="relative mb-4 group flex justify-center">
 												<motion.div
 													className="absolute -inset-1.5 bg-gradient-to-r from-brand-magenta to-brand-blue rounded-full opacity-60 blur-sm group-hover:opacity-100 transition duration-500"
 													animate={pulseAnimation}
@@ -385,128 +477,112 @@ export default function PerfilPage() {
 												</motion.button>
 											</div>
 
+											<div className="flex justify-center">
 											<StatusBadge status="verified" />
-
-											<div className="mt-6 w-full">
-												<div className="flex items-center gap-3 p-3 bg-white/80 rounded-lg shadow-sm mb-3">
-													<UserCircle className="h-5 w-5 text-brand-magenta" />
-													<div className="text-sm font-medium line-clamp-1">
-														{clerkUser?.fullName || 'Usuário'}
-													</div>
-												</div>
-
-												<div className="flex items-center gap-3 p-3 bg-white/80 rounded-lg shadow-sm">
-													<Mail className="h-5 w-5 text-brand-magenta" />
-													<div className="text-sm line-clamp-1">
-														{clerkUser?.emailAddresses?.[0]?.emailAddress ||
-															'Email não disponível'}
-													</div>
-												</div>
 											</div>
 
-											<p className="text-xs text-gray-500 mt-6 flex items-center gap-1">
+											{/* Nome destacado e centralizado */}
+											<h2 className="mt-4 text-xl font-semibold bg-gradient-to-r from-brand-magenta to-brand-blue bg-clip-text text-transparent text-center">
+														{clerkUser?.fullName || 'Usuário'}
+											</h2>
+
+											<p className="text-xs text-gray-500 mt-3 flex items-center justify-center gap-1">
 												<Clock className="h-3 w-3" />
 												Atualizado em: {formatDate(new Date().toISOString())}
 											</p>
-										</motion.div>
 
-										<motion.div variants={slideUp}>
-											<Card className="backdrop-blur-xl bg-white/80 border border-gray-100/60 shadow-lg overflow-hidden relative">
-												<div className="absolute top-0 right-0 h-32 w-32 bg-gradient-to-bl from-brand-magenta/10 to-brand-blue/10 rounded-bl-full" />
-												<CardHeader>
-													<CardTitle className="flex items-center gap-2">
-														<Edit className="h-5 w-5 text-brand-magenta" />
-														Informações Pessoais
-													</CardTitle>
-													<CardDescription>
-														Atualize seus dados e como outros usuários veem seu
-														perfil
-													</CardDescription>
-												</CardHeader>
-												<CardContent className="space-y-4">
-													<div>
-														<Label
-															htmlFor="name"
-															className="font-medium text-gray-700"
-														>
-															Nome completo
-														</Label>
-														<Input
-															id="name"
-															defaultValue={clerkUser?.fullName || ''}
-															className="mt-1 transition-all focus:ring-2 focus:ring-brand-magenta/20"
-															placeholder="Seu nome completo"
-														/>
+											{/* Adiciona botões de atalho modernos e harmoniosos */}
+											<div className="w-full mt-6 pt-2">
+												<motion.div
+													className="grid grid-cols-2 gap-4"
+													variants={{
+														hidden: { opacity: 0, y: 10 },
+														visible: {
+															opacity: 1,
+															y: 0,
+															transition: { staggerChildren: 0.1 },
+														},
+													}}
+													initial="hidden"
+													animate="visible"
+												>
+													<motion.div
+														variants={{
+															hidden: { opacity: 0, scale: 0.95 },
+															visible: {
+																opacity: 1,
+																scale: 1,
+																transition: { duration: 0.3 },
+															},
+														}}
+														whileHover={{
+															scale: 1.03,
+															boxShadow:
+																'0 10px 25px -5px rgba(242, 87, 151, 0.2)',
+														}}
+														whileTap={{ scale: 0.98 }}
+													>
+														<Link href="/purchase-history">
+															<div className="bg-gradient-to-br from-white via-white to-brand-magenta/5 hover:to-brand-magenta/10 rounded-xl p-3 h-full border border-gray-100/80 shadow-sm transition-all flex flex-col items-center justify-center gap-2">
+																<div className="w-12 h-12 rounded-full bg-brand-magenta flex items-center justify-center">
+																	<ShoppingCart className="h-6 w-6 text-white" />
 													</div>
-
-													<div>
-														<Label
-															htmlFor="email"
-															className="font-medium text-gray-700"
-														>
-															Email
-														</Label>
-														<Input
-															id="email"
-															defaultValue={
-																clerkUser?.emailAddresses?.[0]?.emailAddress ||
-																''
-															}
-															className="mt-1 bg-gray-50"
-															disabled
-														/>
-														<p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-															<AlertTriangle className="h-3 w-3" />O email não
-															pode ser alterado diretamente
-														</p>
+																<span className="text-sm font-medium text-gray-800">
+																	Compras
+																</span>
 													</div>
-
-													<div>
-														<Label
-															htmlFor="bio"
-															className="font-medium text-gray-700"
-														>
-															Biografia
-														</Label>
-														<Textarea
-															id="bio"
-															defaultValue=""
-															className="mt-1 resize-none transition-all focus:ring-2 focus:ring-brand-magenta/20"
-															placeholder="Conte um pouco sobre você..."
-															rows={4}
-														/>
-													</div>
+														</Link>
+													</motion.div>
 
 													<motion.div
-														className="flex justify-end mt-6"
-														variants={slideUp}
-													>
-														<motion.div
-															whileHover={{ scale: 1.02 }}
+														variants={{
+															hidden: { opacity: 0, scale: 0.95 },
+															visible: {
+																opacity: 1,
+																scale: 1,
+																transition: { duration: 0.3, delay: 0.1 },
+															},
+														}}
+														whileHover={{
+															scale: 1.03,
+															boxShadow:
+																'0 10px 25px -5px rgba(242, 87, 151, 0.2)',
+														}}
 															whileTap={{ scale: 0.98 }}
 														>
-															<Button
-																onClick={handleSaveProfile}
-																disabled={isSaving}
-																type="button"
-																className="bg-gradient-to-r from-brand-magenta to-brand-blue hover:opacity-90 text-white shadow-md hover:shadow-lg transition-all"
-															>
-																{isSaving ? (
-																	<>
-																		<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-																		Salvando...
-																	</>
-																) : (
-																	<>
-																		<Save className="mr-2 h-4 w-4" />
-																		Salvar alterações
-																	</>
-																)}
-															</Button>
+														<Link href="/favorites">
+															<div className="bg-gradient-to-br from-white via-white to-brand-blue/5 hover:to-brand-blue/10 rounded-xl p-3 h-full border border-gray-100/80 shadow-sm transition-all flex flex-col items-center justify-center gap-2">
+																<div className="w-12 h-12 rounded-full bg-brand-magenta flex items-center justify-center">
+																	<Heart className="h-6 w-6 text-white" />
+																</div>
+																<span className="text-sm font-medium text-gray-800">
+																	Favoritos
+																</span>
+															</div>
+														</Link>
 														</motion.div>
 													</motion.div>
-												</CardContent>
-											</Card>
+											</div>
+										</motion.div>
+
+										{/* Card de categoria e saldo */}
+										<motion.div
+											variants={slideUp}
+											className="flex flex-col bg-white/70 backdrop-blur-md p-6 rounded-xl border border-gray-100/60 shadow-lg items-center"
+										>
+											<div className="mb-4 flex flex-col items-center">
+												<h3 className="text-lg font-semibold bg-gradient-to-r from-brand-magenta to-brand-blue bg-clip-text text-transparent flex items-center justify-center gap-2">
+													<Store className="w-6 h-5 text-brand-magenta" />
+													Informações de Cliente
+												</h3>
+												<p className="text-sm bg-gradient-to-r from-brand-magenta/70 to-brand-blue/70 bg-clip-text text-transparent flex justify-center pl-8">
+													Seu plano e limite de compras
+												</p>
+											</div>
+
+											<div className="flex-1 w-full flex justify-center">
+												<CustomerCategoryInfo />
+											</div>
 										</motion.div>
 									</motion.div>
 								</TabsContent>
@@ -527,7 +603,7 @@ export default function PerfilPage() {
 													<Bell className="h-5 w-5 text-brand-magenta" />
 													Configurações de Notificações
 												</CardTitle>
-												<CardDescription>
+												<CardDescription className="text-brand-blue/70">
 													Gerencie como e quando você deseja receber
 													notificações
 												</CardDescription>
@@ -541,10 +617,10 @@ export default function PerfilPage() {
 													}}
 												>
 													<div>
-														<h3 className="text-lg font-medium">
+														<h3 className="text-lg font-medium text-brand-magenta/90">
 															Notificações no aplicativo
 														</h3>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-brand-blue/70">
 															Receba atualizações sobre pedidos, promoções
 															exclusivas e novidades
 														</p>
@@ -564,10 +640,10 @@ export default function PerfilPage() {
 													}}
 												>
 													<div>
-														<h3 className="text-lg font-medium">
+														<h3 className="text-lg font-medium text-brand-magenta/90">
 															Notificações por e-mail
 														</h3>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-brand-blue/70">
 															Receba um resumo semanal de novidades e promoções
 														</p>
 													</div>
@@ -620,7 +696,157 @@ export default function PerfilPage() {
 										initial="hidden"
 										animate="visible"
 										exit={{ opacity: 0 }}
+										className="grid gap-8"
 									>
+										{/* Card de Informações Pessoais movido para cá */}
+										<Card className="backdrop-blur-xl bg-white/80 border border-gray-100/60 shadow-lg overflow-hidden relative">
+											<div className="absolute top-0 right-0 h-32 w-32 bg-gradient-to-bl from-brand-magenta/10 to-brand-blue/10 rounded-bl-full" />
+											<CardHeader>
+												<CardTitle className="flex items-center gap-2">
+													<Edit className="h-5 w-5 text-brand-magenta" />
+													Informações Pessoais
+												</CardTitle>
+												<CardDescription className="text-brand-blue/70">
+													Atualize seus dados e como outros usuários veem seu
+													perfil
+												</CardDescription>
+											</CardHeader>
+											<CardContent className="space-y-4">
+												<div>
+													<Label
+														htmlFor="name"
+														className="font-medium text-brand-magenta/80"
+													>
+														Nome completo
+													</Label>
+													<Input
+														id="name"
+														defaultValue={clerkUser?.fullName || ''}
+														className="mt-1 transition-all focus:ring-2 focus:ring-brand-magenta/20"
+														placeholder="Seu nome completo"
+													/>
+												</div>
+
+												<div>
+													<Label
+														htmlFor="email"
+														className="font-medium text-brand-magenta/80"
+													>
+														Email
+													</Label>
+													<Input
+														id="email"
+														defaultValue={
+															clerkUser?.emailAddresses?.[0]?.emailAddress || ''
+														}
+														className="mt-1 bg-gray-50"
+														disabled
+													/>
+													<p className="text-xs text-brand-blue/70 mt-1 flex items-center gap-1">
+														<AlertTriangle className="h-3 w-3 text-brand-blue/70" />
+														O email não pode ser alterado diretamente
+													</p>
+												</div>
+
+												<div className="border-t border-gray-200 pt-4 mt-4">
+													<Label
+														htmlFor="current-password"
+														className="font-medium text-brand-magenta/80"
+													>
+														Alterar senha
+													</Label>
+													<div className="space-y-4 mt-2">
+														<div>
+															<Label
+																htmlFor="current-password"
+																className="text-sm text-brand-blue/80"
+															>
+																Senha atual
+															</Label>
+															<Input
+																id="current-password"
+																type="password"
+																className="mt-1 transition-all focus:ring-2 focus:ring-brand-magenta/20"
+																placeholder="Digite sua senha atual"
+																value={currentPassword}
+																onChange={(e) =>
+																	setCurrentPassword(e.target.value)
+																}
+															/>
+														</div>
+														<div>
+															<Label
+																htmlFor="new-password"
+																className="text-sm text-brand-blue/80"
+															>
+																Nova senha
+															</Label>
+															<Input
+																id="new-password"
+																type="password"
+																className="mt-1 transition-all focus:ring-2 focus:ring-brand-magenta/20"
+																placeholder="Digite a nova senha"
+																value={newPassword}
+																onChange={(e) => setNewPassword(e.target.value)}
+															/>
+														</div>
+														<div>
+															<Label
+																htmlFor="confirm-password"
+																className="text-sm text-brand-blue/80"
+															>
+																Confirmar nova senha
+															</Label>
+															<Input
+																id="confirm-password"
+																type="password"
+																className="mt-1 transition-all focus:ring-2 focus:ring-brand-magenta/20"
+																placeholder="Confirme a nova senha"
+																value={confirmPassword}
+																onChange={(e) =>
+																	setConfirmPassword(e.target.value)
+																}
+															/>
+															{passwordError && (
+																<p className="text-xs text-red-500 mt-1">
+																	{passwordError}
+																</p>
+															)}
+														</div>
+														<motion.div
+															whileHover={{ scale: 1.02 }}
+															whileTap={{ scale: 0.98 }}
+														>
+															<Button
+																onClick={handlePasswordChange}
+																disabled={
+																	isChangingPassword ||
+																	!currentPassword ||
+																	!newPassword ||
+																	!confirmPassword
+																}
+																type="button"
+																className="mt-2 bg-gradient-to-r from-brand-magenta to-brand-blue hover:opacity-90 text-white shadow-md hover:shadow-lg transition-all"
+															>
+																{isChangingPassword ? (
+																	<>
+																		<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+																		Alterando senha...
+																	</>
+																) : (
+																	<>
+																		<Save className="mr-2 h-4 w-4" />
+																		Alterar senha
+																	</>
+																)}
+															</Button>
+														</motion.div>
+													</div>
+												</div>
+											</CardContent>
+										</Card>
+
+										{/* Card de Preferências existente */}
 										<Card className="backdrop-blur-xl bg-white/80 border border-gray-100/60 shadow-lg overflow-hidden relative">
 											<div className="absolute bottom-0 right-0 h-40 w-40 bg-gradient-to-tl from-brand-magenta/10 to-brand-blue/10 rounded-tl-full" />
 											<CardHeader>
@@ -628,7 +854,7 @@ export default function PerfilPage() {
 													<Settings className="h-5 w-5 text-brand-magenta" />
 													Preferências de Conta
 												</CardTitle>
-												<CardDescription>
+												<CardDescription className="text-brand-blue/70">
 													Configure suas preferências de uso da plataforma
 												</CardDescription>
 											</CardHeader>
@@ -641,12 +867,14 @@ export default function PerfilPage() {
 													}}
 												>
 													<div>
-														<h3 className="text-lg font-medium">Idioma</h3>
-														<p className="text-sm text-gray-500">
+														<h3 className="text-lg font-medium text-brand-magenta/90">
+															Idioma
+														</h3>
+														<p className="text-sm text-brand-blue/70">
 															Selecione o idioma de exibição
 														</p>
 													</div>
-													<span className="text-sm font-medium px-3 py-1 bg-brand-magenta/10 text-brand-magenta rounded-full">
+													<span className="text-sm font-medium px-3 py-1 bg-brand-magenta/10 text-brand-blue/90 rounded-full">
 														Português (Brasil)
 													</span>
 												</motion.div>
@@ -659,16 +887,16 @@ export default function PerfilPage() {
 													}}
 												>
 													<div>
-														<h3 className="text-lg font-medium">
+														<h3 className="text-lg font-medium text-brand-magenta/90">
 															E-mail de contato
 														</h3>
-														<p className="text-sm text-gray-500">
+														<p className="text-sm text-brand-blue/70">
 															Email para receber comunicações importantes
 														</p>
 													</div>
 													<div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-full">
 														<Mail className="h-4 w-4 text-brand-magenta" />
-														<span className="text-sm">
+														<span className="text-sm text-brand-blue/90">
 															{clerkUser?.emailAddresses?.[0]?.emailAddress ||
 																'Email não disponível'}
 														</span>
@@ -688,12 +916,38 @@ export default function PerfilPage() {
 															Excluir minha conta
 														</Button>
 													</motion.div>
-													<p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-														<AlertTriangle className="h-3 w-3" />A exclusão de
-														conta é permanente e removerá todos os seus dados de
-														nossos servidores.
+													<p className="text-xs text-brand-blue/70 mt-2 flex items-center gap-1">
+														<AlertTriangle className="h-3 w-3 text-brand-blue/70" />
+														A exclusão de conta é permanente e removerá todos os
+														seus dados de nossos servidores.
 													</p>
 												</div>
+
+												<motion.div className="flex justify-end mt-6">
+													<motion.div
+														whileHover={{ scale: 1.02 }}
+														whileTap={{ scale: 0.98 }}
+													>
+														<Button
+															onClick={handleSaveProfile}
+															disabled={isSaving}
+															type="button"
+															className="bg-gradient-to-r from-brand-magenta to-brand-blue hover:opacity-90 text-white shadow-md hover:shadow-lg transition-all"
+														>
+															{isSaving ? (
+																<>
+																	<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+																	Salvando...
+																</>
+															) : (
+																<>
+																	<Save className="mr-2 h-4 w-4" />
+																	Salvar alterações
+																</>
+															)}
+														</Button>
+													</motion.div>
+												</motion.div>
 											</CardContent>
 										</Card>
 									</motion.div>
