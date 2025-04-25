@@ -11,6 +11,8 @@ try {
   }
 }
 
+import path from "path";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -28,10 +30,10 @@ const nextConfig = {
     parallelServerCompiles: true,
   },
   webpack: (config) => {
-    // Configuração para resolver o alias @/ corretamente
+    // Configuração para resolver o alias @/ corretamente usando path.resolve
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@": ".",
+      "@": path.resolve(__dirname),
     };
     return config;
   },
