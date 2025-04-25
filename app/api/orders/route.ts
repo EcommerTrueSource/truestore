@@ -90,6 +90,89 @@ export async function POST(request: NextRequest) {
         warehouse = customer.__warehouse__;
       }
       
+      // Verificar limites de compra do cliente antes de prosseguir
+      console.log(`[Orders API] Verificando limites de compra para o cliente ID: ${customer.id}`);
+      
+      // Obter limites de pedido para o cliente
+      const orderLimitsEndpoint = `${baseUrl}/marketing/customers/${customer.id}/order-limits`;
+      console.log(`[Orders API] Buscando limites de pedido em: ${orderLimitsEndpoint}`);
+      
+      const limitsResponse = await fetch(orderLimitsEndpoint, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!limitsResponse.ok) {
+        console.error(`[Orders API] Erro ao obter limites do cliente: ${limitsResponse.status}`);
+        return NextResponse.json(
+          { error: 'Não foi possível verificar os limites de compra do cliente' },
+          { status: 500 }
+        );
+      }
+      
+      const limitsData = await limitsResponse.json();
+      console.log('[Orders API] Limites do cliente:', JSON.stringify(limitsData));
+      
+      // Valor total do pedido
+      const totalValue = checkoutData.payment.subtotal;
+      
+      // Verificar se o cliente tem limite de frequência disponível
+      if (limitsData.limits?.frequencyPerMonth?.hasLimit && 
+          limitsData.limits.frequencyPerMonth.remaining <= 0) {
+        console.error('[Orders API] Cliente atingiu o limite de pedidos para o período');
+        
+        // Obter as datas do período para informar na mensagem
+        const startDate = limitsData.limits.frequencyPerMonth.period?.start || '';
+        const endDate = limitsData.limits.frequencyPerMonth.period?.end || '';
+        const period = startDate && endDate ? ` para o período de ${startDate} a ${endDate}` : '';
+        
+        return NextResponse.json(
+          { 
+            error: 'Limite de pedidos atingido', 
+            details: { 
+              message: `Você já atingiu o limite de pedidos${period}. O limite será renovado automaticamente ao final do período.`,
+              type: 'frequency_limit',
+              limit: limitsData.limits.frequencyPerMonth.limit,
+              used: limitsData.limits.frequencyPerMonth.used,
+              period: limitsData.limits.frequencyPerMonth.period
+            } 
+          },
+          { status: 400 }
+        );
+      }
+      
+      // Verificar se o cliente tem saldo suficiente
+      if (limitsData.limits?.ticketValue?.hasLimit) {
+        const remainingValue = parseFloat(limitsData.limits.ticketValue.remaining);
+        
+        if (remainingValue <= 0 || remainingValue < totalValue) {
+          console.error(`[Orders API] Cliente não tem saldo suficiente. Disponível: ${remainingValue}, Pedido: ${totalValue}`);
+          
+          // Obter as datas do período para informar na mensagem
+          const startDate = limitsData.limits.ticketValue.period?.start || '';
+          const endDate = limitsData.limits.ticketValue.period?.end || '';
+          const period = startDate && endDate ? ` válido até ${endDate}` : '';
+          
+          return NextResponse.json(
+            { 
+              error: 'Saldo insuficiente', 
+              details: { 
+                message: `Seu saldo disponível é R$ ${remainingValue.toFixed(2)}${period}. O valor do seu pedido é R$ ${totalValue.toFixed(2)}.`,
+                type: 'insufficient_balance',
+                available: remainingValue,
+                required: totalValue,
+                period: limitsData.limits.ticketValue.period
+              } 
+            },
+            { status: 400 }
+          );
+        }
+      }
+      
       // Formatar endereço como string única
       const address = checkoutData.delivery;
       const formattedAddress = `${address.street}, ${address.number}, ${address.neighborhood}, ${address.city} - ${address.state}, ${address.zipCode}${address.complement ? `, ${address.complement}` : ''}`;
@@ -144,6 +227,23 @@ export async function POST(request: NextRequest) {
           try {
             const errorData = JSON.parse(errorText);
             console.error('[Orders API] Detalhes do erro:', JSON.stringify(errorData));
+            
+            // Verificar se há mensagens específicas para melhorar a experiência do usuário
+            if (errorData && errorData.message && Array.isArray(errorData.message)) {
+              // Formatar mensagens de erro para serem mais amigáveis ao usuário
+              const userFriendlyMessages = errorData.message.map((msg: string) => {
+                if (msg.includes('operation must be one of the following values')) {
+                  return 'Tipo de operação inválido para este pedido.';
+                }
+                if (msg.includes('paymentMethod must be one of the following values')) {
+                  return 'Método de pagamento não suportado.';
+                }
+                return msg;
+              });
+              
+              errorData.userMessage = userFriendlyMessages.join(' ');
+            }
+            
             return NextResponse.json(
               { error: 'Erro ao criar pedido', details: errorData },
               { status: response.status }
@@ -165,7 +265,21 @@ export async function POST(request: NextRequest) {
       try {
         const orderResponseData = await response.json();
         console.log('[Orders API] Pedido criado com sucesso:', JSON.stringify(orderResponseData));
-        return NextResponse.json(orderResponseData);
+        
+        // Preparar resposta de sucesso com informações úteis para o cliente
+        const successResponse = {
+          ...orderResponseData,
+          success: true,
+          message: 'Pedido criado com sucesso',
+          limitsAfterOrder: {
+            frequencyRemaining: limitsData.limits?.frequencyPerMonth ? 
+              Math.max(0, limitsData.limits.frequencyPerMonth.remaining - 1) : null,
+            balanceRemaining: limitsData.limits?.ticketValue ? 
+              Math.max(0, parseFloat(limitsData.limits.ticketValue.remaining) - totalValue) : null
+          }
+        };
+        
+        return NextResponse.json(successResponse);
       } catch (jsonError) {
         const textResponse = await response.text();
         console.log('[Orders API] Resposta texto (não JSON):', textResponse.substring(0, 500));
