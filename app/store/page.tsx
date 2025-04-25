@@ -32,60 +32,142 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 	const [verificationComplete, setVerificationComplete] = useState(false);
 	const router = useRouter();
 
-	// Verificar token e decidir o fluxo de carregamento
 	useEffect(() => {
 		if (verificationComplete) return;
 
 		const checkToken = async () => {
 			try {
-				// Verificar se temos um token válido
+				console.log('[Store:TokenVerifier] Verificando token...');
+
+				// Primeiro, verificar se há token válido no TokenStore
 				if (tokenStore.hasValidToken()) {
-					console.log('[Store:TokenVerifier] Token válido encontrado');
+					console.log(
+						'[Store:TokenVerifier] Token válido encontrado no TokenStore'
+					);
 					setVerificationComplete(true);
 					onReady();
 					return true;
 				}
 
-				// Verificar se há token em cookies
-				if (typeof document !== 'undefined') {
-					const cookies = document.cookie.split(';');
-					const tokenCookie = cookies.find((c) =>
-						c.trim().startsWith('true_core_token=')
-					);
+				// Verificar se temos um token no localStorage (compatibilidade)
+				const localToken = localStorage.getItem('true_core_token');
+				if (localToken) {
+					try {
+						// Verificar se o token do localStorage é válido
+						const tokenParts = localToken.split('.');
+						if (tokenParts.length === 3) {
+							// Parece ser um JWT válido
+							console.log(
+								'[Store:TokenVerifier] Token encontrado no localStorage'
+							);
 
-					if (tokenCookie) {
-						const extractedToken = tokenCookie.split('=')[1].trim();
-						if (extractedToken) {
-							tokenStore.setToken(extractedToken, 86400);
+							// Considerar pré-válido e permitir acesso inicial à loja
 							setVerificationComplete(true);
 							onReady();
+
+							// Simultaneamente, importar o token para o TokenStore
+							tokenStore.setToken(localToken, 86400); // 24 horas
+
 							return true;
 						}
+					} catch (e) {
+						console.warn(
+							'[Store:TokenVerifier] Erro ao analisar token do localStorage:',
+							e
+						);
 					}
 				}
 
-				// Se não temos token, aguardar um momento e tentar novamente
+				// Se chegamos aqui, não temos token válido imediatamente
+				// Verificar se há um novo token sendo obtido pelo AuthContext
+				// (Pode demorar um pouco mais)
 				console.log(
-					'[Store:TokenVerifier] Token não encontrado, tentando novamente em 1.5s...'
+					'[Store:TokenVerifier] Token não encontrado imediatamente, aguardando...'
 				);
-				setTimeout(async () => {
-					// Verificar novamente após o atraso
-					if (tokenStore.hasValidToken()) {
+
+				// Ouvir evento de autenticação pronta
+				const readyListener = (event: CustomEvent) => {
+					const detail = event.detail || {};
+					console.log(
+						'[Store:TokenVerifier] Evento auth:ready recebido:',
+						detail
+					);
+
+					// Se autenticado ou temos token válido, proceder
+					if (
+						detail.isAuthenticated ||
+						detail.fromToken ||
+						tokenStore.hasValidToken()
+					) {
 						console.log(
-							'[Store:TokenVerifier] Token válido encontrado após tentativa adicional'
+							'[Store:TokenVerifier] Autenticação concluída, token disponível'
 						);
 						setVerificationComplete(true);
 						onReady();
+						window.removeEventListener(
+							'auth:ready',
+							readyListener as EventListener
+						);
 						return true;
 					}
 
-					// Se ainda não temos token, redirecionar para login
+					// Se não autenticado e não temos erros de Clerk, aguardar um pouco mais
+					if (detail.hasError || detail.clerkMissing) {
+						// Verificar token mais uma vez
+						if (tokenStore.hasValidToken()) {
+							console.log(
+								'[Store:TokenVerifier] Token válido encontrado após evento auth:ready'
+							);
+							setVerificationComplete(true);
+							onReady();
+							window.removeEventListener(
+								'auth:ready',
+								readyListener as EventListener
+							);
+							return true;
+						}
+
+						// Caso realmente não tenhamos token, redirecionar
+						console.log(
+							'[Store:TokenVerifier] Sem autenticação e sem token após evento auth:ready'
+						);
+						router.push('/login');
+						window.removeEventListener(
+							'auth:ready',
+							readyListener as EventListener
+						);
+						return false;
+					}
+				};
+
+				window.addEventListener('auth:ready', readyListener as EventListener);
+
+				// Timeout de segurança para não ficar esperando indefinidamente
+				setTimeout(() => {
+					// Verificar token mais uma vez antes de desistir
+					if (tokenStore.hasValidToken()) {
+						console.log(
+							'[Store:TokenVerifier] Token válido encontrado após timeout de segurança'
+						);
+						setVerificationComplete(true);
+						onReady();
+						window.removeEventListener(
+							'auth:ready',
+							readyListener as EventListener
+						);
+						return true;
+					}
+
 					console.log(
-						'[Store:TokenVerifier] Token não encontrado mesmo após tentativas adicionais'
+						'[Store:TokenVerifier] Timeout de espera por token expirado'
 					);
 					router.push('/login');
+					window.removeEventListener(
+						'auth:ready',
+						readyListener as EventListener
+					);
 					return false;
-				}, 1500);
+				}, 3000); // Tempo máximo de espera
 
 				return false;
 			} catch (error) {
@@ -482,8 +564,8 @@ export default function StorePage() {
 			setError(null);
 			setIsLoadingMore(append);
 			// Só mostrar loading geral se não for carregamento de página adicional
-		if (!append) {
-			setIsLoading(true);
+			if (!append) {
+				setIsLoading(true);
 			}
 
 			// Obter parâmetros de pesquisa e filtros
@@ -518,7 +600,7 @@ export default function StorePage() {
 					searchQuery: search,
 					categoryId: category,
 					page: currentPage - 1,
-				limit: PRODUCTS_PER_PAGE,
+					limit: PRODUCTS_PER_PAGE,
 					sortBy: sortOrder,
 				});
 			}
@@ -585,7 +667,7 @@ export default function StorePage() {
 
 				console.log(
 					`[Store] Filtrados ${filteredProducts.length} produtos da categoria ${category}`
-			);
+				);
 
 				// Se estamos na primeira página e temos poucos produtos após filtragem,
 				// carregar mais páginas para tentar encontrar mais produtos da categoria
@@ -742,7 +824,7 @@ export default function StorePage() {
 					);
 					const newProducts = filteredProducts.filter(
 						(product: Product) => !existingIds.has(product.id)
-						);
+					);
 
 					if (newProducts.length === 0) {
 						console.log('[Store] Nenhum produto novo para adicionar');
@@ -1103,7 +1185,7 @@ export default function StorePage() {
 										<AnimatePresence mode="popLayout">
 											{products.map((product, index) => (
 												<motion.div
-												key={product.id}
+													key={product.id}
 													initial={{ opacity: 0, y: 20 }}
 													animate={{ opacity: 1, y: 0 }}
 													transition={{
@@ -1112,12 +1194,12 @@ export default function StorePage() {
 													}}
 												>
 													<ProductCard
-												product={product}
-												categories={categories}
-												viewMode={viewMode}
-											/>
+														product={product}
+														categories={categories}
+														viewMode={viewMode}
+													/>
 												</motion.div>
-										))}
+											))}
 										</AnimatePresence>
 									</div>
 
@@ -1127,33 +1209,33 @@ export default function StorePage() {
 										className="flex justify-center h-20 mt-4"
 										data-testid="infinite-loader"
 									>
-											{isLoadingMore && (
+										{isLoadingMore && (
 											<motion.div
 												className="flex items-center gap-2 text-gray-500"
 												initial={{ opacity: 0, y: 10 }}
 												animate={{ opacity: 1, y: 0 }}
 												transition={{ duration: 0.3 }}
 											>
-													<span className="animate-spin">
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															width="20"
-															height="20"
-															viewBox="0 0 24 24"
-															fill="none"
-															stroke="currentColor"
-															strokeWidth="2"
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															className="rotate-0"
-														>
-															<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-														</svg>
-													</span>
-													<span>Carregando mais produtos...</span>
+												<span className="animate-spin">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="20"
+														height="20"
+														viewBox="0 0 24 24"
+														fill="none"
+														stroke="currentColor"
+														strokeWidth="2"
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														className="rotate-0"
+													>
+														<path d="M21 12a9 9 0 1 1-6.219-8.56" />
+													</svg>
+												</span>
+												<span>Carregando mais produtos...</span>
 											</motion.div>
-											)}
-										</div>
+										)}
+									</div>
 
 									{/* Contador de produtos */}
 									<motion.div

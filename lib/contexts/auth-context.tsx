@@ -821,14 +821,67 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 				return;
 			}
 
+			// Verificar se o Clerk está disponível e inicializado
 			if (!window.Clerk) {
-				// Clerk ainda não inicializado
-				console.log('[AuthContext] Clerk ainda não inicializado');
-				setIsLoading(true);
+				console.log(
+					'[AuthContext] Clerk ainda não inicializado, tratando como não autenticado'
+				);
+				setIsAuthenticated(false);
+				setIsLoading(false);
+
+				// Verificar se temos um token válido mesmo sem o Clerk
+				const hasToken = tokenStore.hasValidToken();
+				if (hasToken) {
+					console.log(
+						'[AuthContext] Token True Core válido encontrado, considerando usuário autenticado'
+					);
+					setIsAuthenticated(true);
+
+					// Disparar evento informando que a autenticação está pronta (baseada apenas no token)
+					dispatchCustomEvent('auth:ready', {
+						isAuthenticated: true,
+						fromToken: true,
+					});
+
+					return;
+				}
+
+				// Disparar evento informando que a autenticação está pronta (sem Clerk)
+				dispatchCustomEvent('auth:ready', {
+					isAuthenticated: false,
+					clerkMissing: true,
+				});
+
 				return;
 			}
 
-			// Verificar se há uma sessão ativa
+			// Verificar se o método isSignedIn existe
+			if (typeof window.Clerk.isSignedIn !== 'function') {
+				console.error(
+					'[AuthContext] Método window.Clerk.isSignedIn não é uma função'
+				);
+
+				// Tentar um método alternativo com base na existência do usuário
+				const user = window.Clerk.user;
+				const authenticated = !!user;
+
+				setIsAuthenticated(authenticated);
+				setIsLoading(false);
+
+				if (authenticated && user?.id) {
+					initializeUserData(user.id);
+				}
+
+				// Disparar evento informando o status
+				dispatchCustomEvent('auth:ready', {
+					isAuthenticated: authenticated,
+					alternativeCheck: true,
+				});
+
+				return;
+			}
+
+			// Usar o método isSignedIn de forma segura
 			const authenticated = await window.Clerk.isSignedIn();
 
 			if (authenticated) {
@@ -853,7 +906,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 					userId: userId,
 				});
 			} else {
-				console.log('[AuthContext] Usuário não autenticado');
+				console.log('[AuthContext] Usuário não autenticado via Clerk');
+
+				// Verificar se temos um token válido mesmo sem autenticação do Clerk
+				const hasToken = tokenStore.hasValidToken();
+				if (hasToken) {
+					console.log(
+						'[AuthContext] Token True Core válido encontrado, considerando usuário autenticado'
+					);
+					setIsAuthenticated(true);
+
+					// Disparar evento informando que a autenticação está pronta (baseada apenas no token)
+					dispatchCustomEvent('auth:ready', {
+						isAuthenticated: true,
+						fromToken: true,
+					});
+
+					return;
+				}
+
 				setIsAuthenticated(false);
 				setIsLoading(false);
 
@@ -864,6 +935,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 			}
 		} catch (error) {
 			console.error('[AuthContext] Erro ao verificar autenticação:', error);
+
+			// Verificar se temos um token válido mesmo com erro
+			const hasToken = tokenStore.hasValidToken();
+			if (hasToken) {
+				console.log(
+					'[AuthContext] Token True Core válido encontrado apesar do erro, considerando usuário autenticado'
+				);
+				setIsAuthenticated(true);
+				setIsLoading(false);
+
+				// Disparar evento informando que a autenticação está pronta (baseada apenas no token)
+				dispatchCustomEvent('auth:ready', {
+					isAuthenticated: true,
+					fromToken: true,
+					hadError: true,
+				});
+
+				return;
+			}
+
 			setIsAuthenticated(false);
 			setIsLoading(false);
 
