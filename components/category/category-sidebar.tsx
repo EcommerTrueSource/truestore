@@ -16,7 +16,7 @@ export function CategorySidebar() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const { categories, isLoading, error, reload } = useCategories();
-	const [displayedCategories, setDisplayedCategories] = useState(categories);
+	const [displayedCategories, setDisplayedCategories] = useState([]);
 	const initialLoadComplete = useRef(false);
 
 	const currentCategory = searchParams.get('category');
@@ -35,41 +35,36 @@ export function CategorySidebar() {
 		}
 	}, [categories, isLoading, error]);
 
-	// Log para debug
+	// Log para debug e carregar categorias se necessário - com verificação para evitar loops
 	useEffect(() => {
-		console.log('[Sidebar] Estado das categorias:', {
-			categoriesCount: categories.length,
-			isLoading,
-			error,
-			firstCategories: categories
-				.slice(0, 3)
-				.map((c) => ({ id: c.id, name: c.name, itemQuantity: c.itemQuantity })),
-		});
-
-		// Forçar o carregamento de categorias se estiver na página da loja e as categorias estiverem vazias
+		// Apenas logar e verificar se precisamos forçar o carregamento se o estado mudou
 		if (
+			!initialLoadComplete.current &&
 			pathname.includes('/store') &&
 			categories.length === 0 &&
 			!isLoading &&
-			!error &&
-			!initialLoadComplete.current
+			!error
 		) {
 			console.log(
 				'[Sidebar] Forçando carregamento de categorias na página da loja'
 			);
 			reload();
 		}
-	}, [categories, isLoading, error, pathname, reload]);
+	}, [pathname, categories.length, isLoading, error, reload]);
 
 	const handleCategoryClick = (categoryId: string, categoryName?: string) => {
 		const params = new URLSearchParams(searchParams);
 		if (categoryId === 'all') {
 			params.delete('category');
 			params.delete('categoryName');
+			console.log('[Sidebar] Selecionada categoria: Todos os produtos');
 		} else {
 			params.set('category', categoryId);
 			// Sempre adicionar o nome da categoria para filtro correto na API
 			params.set('categoryName', categoryName || '');
+			console.log(
+				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId})`
+			);
 		}
 		router.push(`${pathname}?${params.toString()}`);
 	};
@@ -180,7 +175,7 @@ export function CategorySidebar() {
 
 			<ScrollArea className="flex-1 pr-2">
 				<nav className="space-y-1 mb-4">
-					<AnimatePresence mode="wait">
+					<AnimatePresence mode="sync">
 						{sortedCategories.map((category) => (
 							<motion.div
 								key={category.id}

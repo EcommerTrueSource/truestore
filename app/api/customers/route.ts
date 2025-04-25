@@ -2,10 +2,7 @@ import { NextRequest } from 'next/server';
 import { TrueCore } from '@/lib/true-core-proxy';
 
 /**
- * Rota unificada para clientes
- * 
- * Este arquivo serve como ponto de entrada principal para todas as requisições relacionadas a clientes.
- * Ele utiliza o TrueCore.handleRequest para implementar a lógica de proxy.
+ * Rota para customers
  * 
  * Endpoint público: /api/customers
  * Endpoint interno: /marketing/customers

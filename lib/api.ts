@@ -459,236 +459,75 @@ export async function searchProducts({
   categoryName,
   categoryItemCount,
   sortBy = "name-asc",
-  page = 1,
+  page = 0, // Importante: a API usa base 0 para paginação
   limit = 20,
   minPrice,
   maxPrice,
   jwtToken,
-  searchQuery
+  searchQuery,
+  warehouseName
 }: {
   query?: string;
   categoryId?: string | null;
   categoryName?: string | null;
   categoryItemCount?: number;
   sortBy?: string;
-  page?: number;
+  page?: number; 
   limit?: number;
   minPrice?: number;
   maxPrice?: number;
   jwtToken?: string;
   searchQuery?: string;
+  warehouseName?: string; // Parâmetro importante: determina o warehouse específico baseado na categoria do cliente (MKT-Creator ou MKT-Top Master)
 }): Promise<Product[]> {
   try {
-    // Verificar se temos um token JWT
-    let token = jwtToken;
+    console.log('[API] Usando função wrapper searchProducts');
     
-    // Se não foi fornecido, tentar obter do TokenStore global
-    if (!token) {
-      const storeToken = tokenStore.getToken();
-      if (!storeToken) {
-        console.error('[API] Token não fornecido e não encontrado no TokenStore');
-        throw new Error('Token de autenticação necessário');
-      } else {
-        token = storeToken;
-        console.log('[API] Usando token do TokenStore global para searchProducts');
-      }
-    } else {
-      // Armazenar o token fornecido no TokenStore global para uso futuro
-      tokenStore.setToken(token, 86400);
-      console.log('[API] Token fornecido foi armazenado no TokenStore global');
-    }
-    
-    // Preparar parâmetros para a busca
-    const params: Record<string, string> = {
-      page: page.toString()
-    };
-    
-    // Ajustar o limite baseado no número de itens na categoria e a paginação
-    let adjustedLimit = limit;
-    let adjustedPage = page;
-
-    if (categoryId && categoryId !== 'all' && categoryName) {
-      // Se temos uma categoria específica selecionada, vamos buscar mais produtos
-      // Limite fixo de 100 produtos por requisição para categorias
-      adjustedLimit = 100;
-      
-      // Se estamos na página > 1, ajustamos os parâmetros para buscar o próximo conjunto de dados
-      if (page > 1) {
-        // A API usa paginação baseada em 0, então ajustamos para obter o conjunto correto
-        adjustedPage = page - 1;
-        console.log(`[API] Buscando página ${adjustedPage} da categoria com limite de ${adjustedLimit}`);
-      } else {
-        console.log('[API] Primeira página de categoria com limite de 100 produtos');
-      }
-    } else if (categoryItemCount && categoryItemCount > 0) {
-      console.log(`[API] Ajustando limite para o número de itens na categoria: ${categoryItemCount}`);
-      // Se estamos na primeira página, usamos o total de itens se for menor que PRODUCTS_PER_PAGE
-      if (page === 1 && categoryItemCount < limit) {
-        adjustedLimit = categoryItemCount;
-      } else if (categoryItemCount > 12) {
-        // Se temos mais de 12 itens, mantemos o limite original para paginação
-        adjustedLimit = limit;
-      } else {
-        // Para categorias com poucos itens, buscamos todos de uma vez
-        adjustedLimit = categoryItemCount;
+    // Garantir que temos um warehouse definido para o cliente
+    if (!warehouseName) {
+      // Verificar no localStorage se há um warehouse salvo
+      if (typeof window !== 'undefined') {
+        const savedWarehouse = localStorage.getItem('warehouse_name');
+        if (savedWarehouse) {
+          console.log(`[API] Usando warehouse do localStorage: ${savedWarehouse}`);
+          warehouseName = savedWarehouse;
+        } else {
+          // Padrão para Creator se nenhum for detectado
+          console.log('[API] Nenhum warehouse encontrado, usando MKT-Creator como padrão');
+          warehouseName = 'MKT-Creator';
+        }
       }
     }
-
-    // Definir o limite ajustado e a página
-    params.limit = adjustedLimit.toString();
-    params.page = adjustedPage.toString();
     
-    // Adicionar query de busca se fornecida
-    if (query) {
-      params.query = query;
-    }
-    
-    // Adicionar termo de busca para a API (usado com o input de busca)
+    // Se temos um termo de busca, usar a função de busca por termo
     if (searchQuery) {
-      params.search = searchQuery;
-    }
-    
-    // Adicionar ID da categoria se fornecida e não for 'all'
-    if (categoryId && categoryId !== 'all') {
-      params.categoryId = categoryId;
-      
-      // Sempre enviar nome da categoria se estiver disponível
-      // para filtro preciso na API
-      if (categoryName) {
-        params.categoryName = categoryName;
-        console.log(`[API] Filtrando pela categoria: ${categoryName}`);
-      }
-    }
-    
-    // Ordenação
-    if (sortBy) {
-      params.sortBy = sortBy;
-    }
-    
-    // Filtros de preço
-    if (minPrice !== undefined && minPrice > 0) {
-      params.minPrice = minPrice.toString();
-    }
-    
-    if (maxPrice !== undefined && maxPrice > 0) {
-      params.maxPrice = maxPrice.toString();
-    }
-    
-    // Construir string de consulta
-    const queryString = new URLSearchParams(params).toString();
-    
-    // Construir um endpoint seguro - em caso de falha da API de busca, temos um fallback
-    let endpoint;
-    let useFallback = false;
-    
-    // Primeiro tentar usar o endpoint de busca avançada
-    endpoint = `/api/marketing/products/search${queryString ? `?${queryString}` : ''}`;
-    
-    console.log(`[API] Buscando produtos com busca avançada: ${endpoint}`);
-    
-    // Enviar o token como cookie para garantir que esteja disponível para a API
-    document.cookie = `true_core_token=${token}; path=/; max-age=3600`;
-    
-    // Fazer a requisição
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        cache: 'no-store',
-        credentials: 'include' // Importante para incluir cookies
+      console.log(`[API] Redirecionando para searchProductsByTerm com termo: "${searchQuery}"`);
+      const results = await searchProductsByTerm({
+        term: searchQuery,
+        page,
+        limit,
+        warehouseName, // Passar o warehouse definido
+        jwtToken,
+        retryCount: 0 // Iniciar com retry 0
       });
-      
-      // Se ocorrer erro 400 (Bad Request), provavelmente há incompatibilidade com os parâmetros
-      // Vamos tentar com o endpoint padrão de produtos
-      if (response.status === 400) {
-        console.log('[API] Erro 400 na API de busca avançada, tentando endpoint padrão...');
-        useFallback = true;
-      } else if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        
-        if (response.status === 401) {
-          console.error('[API] Token expirado ou inválido');
-          tokenStore.clearToken();
-          throw new Error('UNAUTHORIZED');
-        }
-        
-        throw new Error(errorData.error || `Erro ao buscar produtos: ${response.status}`);
-      }
-    } catch (fetchError: any) {
-      if (useFallback || fetchError.message !== 'UNAUTHORIZED') {
-        // Se não for erro de autenticação ou se já temos um flag para fallback, tentar endpoint padrão
-        console.log('[API] Usando endpoint padrão de produtos como fallback');
-        endpoint = `/api/marketing/products${queryString ? `?${queryString}` : ''}`;
-        
-        response = await fetch(endpoint, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          cache: 'no-store',
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          
-          if (response.status === 401) {
-            console.error('[API] Token expirado ou inválido no endpoint fallback');
-            tokenStore.clearToken();
-            throw new Error('UNAUTHORIZED');
-          }
-          
-          throw new Error(errorData.error || `Erro ao buscar produtos (fallback): ${response.status}`);
-        }
-      } else {
-        // Se for outro erro, propagar
-        throw fetchError;
-      }
+      return results;
     }
     
-    // Obter dados da resposta
-    const responseData = await response.json();
-    
-    // Processar a resposta - converter para formato esperado
-    let products: Product[] = [];
-    
-    // A API retorna um objeto com propriedade 'data' que contém o array de produtos
-    if (responseData && typeof responseData === 'object' && 'data' in responseData && Array.isArray(responseData.data)) {
-      // Filtrar apenas produtos ativos (active: true)
-      const activeProducts = responseData.data.filter((item: any) => item.active === true);
-      
-      console.log(`[API] Filtrados ${activeProducts.length} produtos ativos de um total de ${responseData.data.length}`);
-      
-      // Mapear os produtos da API para o formato esperado pelo nosso app
-      products = activeProducts.map((item: any) => ({
-        id: item.sku || item.tinyId || item.id,
-        name: item.name,
-        description: item.description || '',
-        price: parseFloat(item.price),
-        originalPrice: item.costPrice ? parseFloat(item.costPrice) : undefined,
-        imageUrl: item.images && item.images.length > 0 ? item.images[0] : '/placeholder.svg',
-        categoryId: item.categoryId || '',
-        category: item.category || undefined,
-        codigo: item.sku,
-        unidade: item.attributes?.unidade || 'UN',
-        active: item.active
-      }));
-      
-      console.log(`[API] Processados ${products.length} produtos ativos da busca avançada`);
-    } else {
-      console.error('[API] Formato inesperado na resposta da API de busca avançada:', responseData);
-      throw new Error('Formato inesperado na resposta da API');
-    }
-    
-    return products;
+    // Caso contrário, usar a função de busca por categoria
+    console.log(`[API] Redirecionando para fetchProductsByCategory com warehouse: ${warehouseName}`);
+    const results = await fetchProductsByCategory({
+      page,
+      limit,
+      warehouseName, // Passar o warehouse definido
+      jwtToken,
+      retryCount: 0, // Iniciar com retry 0
+      categoryId
+    });
+    return results;
   } catch (error) {
-    console.error('[API] Erro ao realizar busca avançada de produtos:', error);
-    throw error; // Propagar o erro para ser tratado pelo componente
+    console.error('[API] Erro na função wrapper searchProducts:', error);
+    // Em caso de erro retornar array vazio para evitar quebrar a UI
+    return [];
   }
 }
 
@@ -741,9 +580,789 @@ export async function fetchCustomerByClerkId(
     const customer = await response.json();
     console.log(`[API] Cliente encontrado: ${customer.name}`);
     
+    // Verificar a categoria do cliente e definir o warehouse adequado
+    if (customer.__category__) {
+      const categoryName = customer.__category__.name;
+      console.log(`[API] Categoria do cliente: ${categoryName}`);
+      
+      // Salvar registro da categoria detectada para uso futuro
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('category_extract', `Cliente identificado como ${categoryName}`);
+        
+        // Definir o warehouse com base na categoria do cliente
+        if (categoryName.includes('Creator')) {
+          console.log('[API] Cliente é Creator, definindo warehouse MKT-Creator');
+          localStorage.setItem('warehouse_name', 'MKT-Creator');
+        } else if (categoryName.includes('Top Master')) {
+          console.log('[API] Cliente é Top Master, definindo warehouse MKT-Top Master');
+          localStorage.setItem('warehouse_name', 'MKT-Top Master');
+        } else {
+          // Categoria padrão caso não seja identificada
+          console.log('[API] Categoria não identificada, usando MKT-Creator como padrão');
+          localStorage.setItem('warehouse_name', 'MKT-Creator');
+        }
+      }
+    }
+    
     return customer;
   } catch (error) {
     console.error('[API] Erro ao buscar cliente:', error);
+    throw error;
+  }
+}
+
+// Função para buscar produtos por categoria do cliente
+export async function fetchProductsByCategory({
+  searchQuery,
+  page = 0,
+  limit = 12,
+  jwtToken,
+  warehouseName,
+  retryCount = 0,
+  categoryId
+}: {
+  searchQuery?: string;
+  page?: number;
+  limit?: number;
+  jwtToken?: string;
+  warehouseName?: string;
+  retryCount?: number;
+  categoryId?: string | null;
+}): Promise<any> {
+  // Limite máximo de tentativas
+  const MAX_RETRIES = 3;
+  
+  try {
+    console.log(`[API] Buscando produtos por categoria (tentativa ${retryCount + 1}/${MAX_RETRIES + 1})`);
+    
+    // Verificar se temos um token JWT
+    let token = jwtToken;
+    
+    // Se não foi fornecido, tentar obter do TokenStore global
+    if (!token && typeof window !== 'undefined') {
+      const storeToken = tokenStore.getToken();
+      if (!storeToken) {
+        console.error('[API] Token não fornecido e não encontrado no TokenStore');
+        
+        // Se ainda temos tentativas disponíveis, aguardar um pouco e tentar novamente
+        if (retryCount < MAX_RETRIES) {
+          console.log(`[API] Aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          
+          return fetchProductsByCategory({
+            searchQuery,
+            page,
+            limit,
+            jwtToken,
+            warehouseName,
+            retryCount: retryCount + 1,
+            categoryId
+          });
+        }
+        
+        throw new Error('Token de autenticação necessário');
+      } else {
+        token = storeToken;
+      }
+    } else if (!token) {
+      console.error('[API] Token não fornecido e TokenStore não disponível (SSR)');
+      throw new Error('Token de autenticação necessário para busca de produtos');
+    }
+    
+    // Construir parâmetros de consulta
+    const params: Record<string, string> = {
+      page: page.toString(),
+      limit: limit.toString(),
+      inStock: 'true',  // Garantir que buscamos apenas produtos em estoque
+      active: 'true'    // Garantir que buscamos apenas produtos ativos
+    };
+    
+    // Adicionar termo de busca se fornecido
+    if (searchQuery) {
+      params.term = searchQuery;
+    }
+    
+    // Adicionar warehouse se fornecido explicitamente
+    if (warehouseName) {
+      params.warehouseName = warehouseName;
+      console.log(`[API] Usando warehouse específico: ${warehouseName}`);
+    }
+    
+    // Adicionar categoria se fornecida
+    if (categoryId) {
+      // Caso especial: se for a categoria Proteínas, incluir ambos os IDs no parâmetro categoryIds
+      if (categoryId === '8bb26b67-a7ce-4001-ae51-ceec0082fb89') {
+        console.log('[API] Categoria Proteínas detectada, incluindo ambos os IDs conhecidos');
+        params.categoryIds = JSON.stringify(['8bb26b67-a7ce-4001-ae51-ceec0082fb89', '8fade785-4ad2-4f53-b715-c4a662dd6be6']);
+      } else {
+        params.categoryId = categoryId;
+      }
+      console.log(`[API] Filtrando por categoria: ${categoryId}`);
+    }
+    
+    // Construir string de consulta
+    const queryString = new URLSearchParams(params).toString();
+    
+    // Usar o endpoint interno que protege a URL externa
+    const endpoint = `/api/marketing/products/warehouse/search?${queryString}`;
+    console.log(`[API] Buscando produtos usando endpoint: ${endpoint}`);
+    
+    // Fazer a requisição
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Cache-Control': 'no-cache',
+        'X-Requested-With': 'XMLHttpRequest' // Para evitar respostas HTML
+      },
+      credentials: 'include', // Importante para incluir cookies com o token
+      cache: 'no-store'
+    });
+    
+    // Verificar se a resposta está ok
+    if (!response.ok) {
+      const errorStatus = response.status;
+      let errorMessage = `Erro ao buscar produtos: ${errorStatus}`;
+      
+      // Tentar obter detalhes do erro
+      try {
+        const contentType = response.headers.get('content-type');
+        
+        // Verificar se a resposta é JSON antes de tentar fazer o parse
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          console.error(`[API] Erro ao buscar produtos: ${errorStatus}`, errorData);
+          
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } else {
+          const errorText = await response.text();
+          console.error(`[API] Erro não-JSON ao buscar produtos (${errorStatus}): ${errorText.substring(0, 200)}...`);
+          
+          // Tentar extrair mensagem de erro do HTML
+          if (contentType && contentType.includes('text/html')) {
+            // Extrair título do HTML
+            const titleMatch = errorText.match(/<title>(.*?)<\/title>/i);
+            if (titleMatch && titleMatch[1]) {
+              errorMessage = titleMatch[1];
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[API] Erro ao processar resposta de erro:`, e);
+      }
+      
+      // Tratar erros de autorização
+      if (errorStatus === 401 || errorStatus === 403) {
+        console.error('[API] Erro de autorização:', errorStatus);
+        
+        // Limpar token inválido
+        if (typeof window !== 'undefined') {
+          tokenStore.clearToken();
+        }
+        
+        // Se ainda temos tentativas disponíveis, aguardar um pouco e tentar novamente
+        if (retryCount < MAX_RETRIES) {
+          console.log(`[API] Tentando obter novo token e aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          
+          return fetchProductsByCategory({
+            searchQuery,
+            page,
+            limit,
+            jwtToken: undefined, // Forçar obtenção de novo token
+            warehouseName,
+            retryCount: retryCount + 1,
+            categoryId
+          });
+        }
+        
+        throw new Error(`Erro de autorização: ${errorMessage}`);
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    // Clonar a resposta para possível análise de texto posterior
+    const clonedResponse = response.clone();
+    
+    // Verificar o tipo de conteúdo da resposta
+    const contentType = response.headers.get('content-type') || '';
+    console.log(`[API] Tipo de conteúdo da resposta: ${contentType}`);
+    
+    // Tentar processar a resposta como JSON independentemente do content-type
+    try {
+      // Primeiro tentar processar normalmente
+      const responseData = await response.json();
+      
+      // Log para debug
+      console.log(`[API] Resposta processada como JSON com sucesso. Estrutura: ${JSON.stringify(Object.keys(responseData))}`);
+      
+      // Verificar se temos dados válidos na resposta
+      let products: any[] = [];
+      
+      if (responseData && responseData.data && Array.isArray(responseData.data)) {
+        // Formato esperado: { data: [...] }
+        products = responseData.data;
+        console.log(`[API] Encontrados ${products.length} produtos no formato padrão { data: [...] }`);
+      } else if (Array.isArray(responseData)) {
+        // Formato alternativo: array direto
+        products = responseData;
+        console.log(`[API] Encontrados ${products.length} produtos em formato de array direto`);
+      } else {
+        // Tentar encontrar dados em outras propriedades possíveis
+        const possibleDataProps = ['products', 'items', 'results', 'content'];
+        
+        for (const prop of possibleDataProps) {
+          if (responseData[prop] && Array.isArray(responseData[prop])) {
+            products = responseData[prop];
+            console.log(`[API] Dados encontrados na propriedade "${prop}" com ${products.length} produtos`);
+            break;
+          }
+        }
+        
+        // Se ainda não encontramos, logar o problema e tentar usar o objeto inteiro
+        if (products.length === 0) {
+          console.error('[API] Formato de resposta inesperado:', JSON.stringify(responseData).substring(0, 300) + '...');
+          
+          // Verificar se o objeto em si pode ser tratado como um produto
+          if (responseData.id || responseData.sku || responseData.name) {
+            console.log('[API] Tratando objeto único como produto');
+            products = [responseData];
+          } else {
+            console.error('[API] Não foi possível encontrar dados de produtos na resposta');
+            return []; // Retornar array vazio
+          }
+        }
+      }
+      
+      console.log(`[API] ${products.length} produtos encontrados via categoria`);
+      
+      // Processar produtos para garantir formato consistente
+      const processedProducts = products.map((item: any) => ({
+        id: item.sku || item.tinyId || item.id,
+        name: item.name || 'Produto sem nome',
+        description: item.description || '',
+        price: typeof item.price === 'number' ? item.price : parseFloat(item.price || '0'),
+        originalPrice: item.costPrice ? parseFloat(item.costPrice) : undefined,
+        imageUrl: item.images && item.images.length > 0 ? item.images[0] : '/placeholder.svg',
+        categoryId: item.categoryId || '',
+        category: item.category || undefined,
+        codigo: item.sku || '',
+        unidade: item.attributes?.unidade || 'UN',
+        active: item.active !== undefined ? item.active : true
+      }));
+      
+      // Retornar os dados processados
+      return processedProducts;
+    } catch (jsonError) {
+      console.error('[API] Erro ao processar resposta como JSON:', jsonError);
+      
+      // Se falhou em processar como JSON e o content-type não é JSON, tentar processar o texto
+      if (!contentType.includes('application/json')) {
+        try {
+          // Obter o texto bruto da resposta
+          const responseText = await clonedResponse.text();
+          console.log(`[API] Texto bruto da resposta (primeiros 100 caracteres): ${responseText.substring(0, 100)}...`);
+          
+          // Verificar se parece ser JSON (começa com { ou [)
+          if ((responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) && 
+              (responseText.trim().endsWith('}') || responseText.trim().endsWith(']'))) {
+            
+            console.log('[API] O conteúdo parece ser JSON, tentando parse manual');
+            
+            try {
+              // Tentar interpretar manualmente como JSON
+              const manualParsedData = JSON.parse(responseText);
+              
+              // Se conseguiu fazer o parse, continuar o processamento
+              console.log('[API] Parse manual bem-sucedido, estrutura:', Object.keys(manualParsedData));
+              
+              // Verificar se temos dados válidos
+              let products: any[] = [];
+              
+              if (manualParsedData && manualParsedData.data && Array.isArray(manualParsedData.data)) {
+                products = manualParsedData.data;
+                console.log(`[API] Encontrados ${products.length} produtos no formato { data: [...] } após parse manual`);
+              } else if (Array.isArray(manualParsedData)) {
+                products = manualParsedData;
+                console.log(`[API] Encontrados ${products.length} produtos em formato de array após parse manual`);
+              } else {
+                // Tentar outras propriedades
+                const possibleDataProps = ['products', 'items', 'results', 'content'];
+                
+                for (const prop of possibleDataProps) {
+                  if (manualParsedData[prop] && Array.isArray(manualParsedData[prop])) {
+                    products = manualParsedData[prop];
+                    console.log(`[API] Dados encontrados na propriedade "${prop}" após parse manual`);
+                    break;
+                  }
+                }
+              }
+              
+              // Processar produtos encontrados
+              if (products.length > 0) {
+                const processedProducts = products.map((item: any) => ({
+                  id: item.sku || item.tinyId || item.id,
+                  name: item.name || 'Produto sem nome',
+                  description: item.description || '',
+                  price: typeof item.price === 'number' ? item.price : parseFloat(item.price || '0'),
+                  originalPrice: item.costPrice ? parseFloat(item.costPrice) : undefined,
+                  imageUrl: item.images && item.images.length > 0 ? item.images[0] : '/placeholder.svg',
+                  categoryId: item.categoryId || '',
+                  category: item.category || undefined,
+                  codigo: item.sku || '',
+                  unidade: item.attributes?.unidade || 'UN',
+                  active: item.active !== undefined ? item.active : true
+                }));
+                
+                return processedProducts;
+              }
+            } catch (parseError) {
+              console.error('[API] Erro no parse manual de JSON:', parseError);
+            }
+          }
+          
+          // Se parece ser HTML, pode ser um problema de autenticação
+          if (responseText.includes('<!DOCTYPE html>') || responseText.includes('<html>')) {
+            console.error('[API] Resposta é HTML, não JSON');
+            
+            // Se ainda temos tentativas disponíveis, aguardar e tentar novamente
+            if (retryCount < MAX_RETRIES) {
+              console.log(`[API] Tentando novamente após receber HTML inesperado...`);
+              await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+              
+              return fetchProductsByCategory({
+                searchQuery,
+                page,
+                limit,
+                jwtToken: undefined, // Forçar obtenção de novo token
+                warehouseName,
+                retryCount: retryCount + 1,
+                categoryId
+              });
+            }
+            
+            throw new Error('Recebida página HTML em vez de dados JSON');
+          }
+        } catch (textError) {
+          console.error('[API] Erro ao obter texto bruto:', textError);
+        }
+      }
+      
+      // Se ainda não conseguimos resolver, e temos tentativas disponíveis, tentar novamente
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[API] Tentando novamente após erro de processamento...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        
+        return fetchProductsByCategory({
+          searchQuery,
+          page,
+          limit,
+          jwtToken,
+          warehouseName,
+          retryCount: retryCount + 1,
+          categoryId
+        });
+      }
+      
+      // Após todas as tentativas, se não conseguimos processar a resposta, retornar array vazio
+      console.error('[API] Falha em todas as tentativas de processar a resposta');
+      return [];
+    }
+  } catch (error) {
+    console.error('[API] Erro ao buscar produtos por categoria:', error);
+    
+    // Se ainda temos tentativas disponíveis, aguardar um pouco e tentar novamente
+    if (retryCount < MAX_RETRIES) {
+      console.log(`[API] Erro na tentativa ${retryCount + 1}, aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+      
+      return fetchProductsByCategory({
+        searchQuery,
+        page,
+        limit,
+        jwtToken,
+        warehouseName,
+        retryCount: retryCount + 1,
+        categoryId
+      });
+    }
+    
+    // Não propagar o erro, retornar array vazio em caso de erro
+    console.log('[API] Retornando array vazio após todas as tentativas falharem');
+    return [];
+  }
+}
+
+// Função para busca de produtos por termo específico
+export async function searchProductsByTerm({
+  term,
+  page = 0,
+  limit = 12,
+  warehouseName,
+  jwtToken,
+  retryCount = 0
+}: {
+  term: string;
+  page?: number;
+  limit?: number;
+  warehouseName?: string;
+  jwtToken?: string;
+  retryCount?: number;
+}): Promise<any> {
+  // Limite máximo de tentativas
+  const MAX_RETRIES = 3;
+
+  try {
+    console.log(`[API] Buscando produtos com termo: "${term}" (tentativa ${retryCount + 1}/${MAX_RETRIES + 1})`);
+    
+    // Verificar se temos um token JWT
+    let token = jwtToken;
+    
+    // Se não foi fornecido, tentar obter do TokenStore global
+    if (!token && typeof window !== 'undefined') {
+      const storeToken = tokenStore.getToken();
+      if (!storeToken) {
+        console.error('[API] Token não fornecido e não encontrado no TokenStore');
+        
+        // Se ainda temos tentativas disponíveis, aguardar um pouco e tentar novamente
+        if (retryCount < MAX_RETRIES) {
+          console.log(`[API] Aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          
+          return searchProductsByTerm({
+            term,
+            page,
+            limit,
+            warehouseName,
+            jwtToken,
+            retryCount: retryCount + 1
+          });
+        }
+        
+        throw new Error('Token de autenticação necessário');
+      } else {
+        token = storeToken;
+      }
+    } else if (!token) {
+      console.error('[API] Token não fornecido e TokenStore não disponível (SSR)');
+      throw new Error('Token de autenticação necessário para busca de produtos');
+    }
+    
+    // Construir parâmetros de consulta
+    const params: Record<string, string> = {
+      term,
+      page: page.toString(),
+      limit: limit.toString(),
+      inStock: 'true',  // Garantir que buscamos apenas produtos em estoque
+      active: 'true'    // Garantir que buscamos apenas produtos ativos
+    };
+    
+    // Adicionar warehouse se especificado, senão usar o padrão 'geral'
+    if (warehouseName) {
+      params.warehouseName = warehouseName;
+      console.log(`[API] Usando warehouse específico para busca: ${warehouseName}`);
+    }
+    
+    // Construir string de consulta
+    const queryString = new URLSearchParams(params).toString();
+    
+    // Usar o endpoint interno que protege a URL externa
+    const endpoint = `/api/marketing/products/warehouse/search?${queryString}`;
+    console.log(`[API] Buscando produtos usando endpoint: ${endpoint}`);
+    
+    // Fazer a requisição
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Cache-Control': 'no-cache',
+        'X-Requested-With': 'XMLHttpRequest' // Para evitar respostas HTML
+      },
+      credentials: 'include', // Importante para incluir cookies com o token
+      cache: 'no-store'
+    });
+    
+    // Verificar se a resposta está ok
+    if (!response.ok) {
+      const errorStatus = response.status;
+      let errorMessage = `Erro ao buscar produtos: ${errorStatus}`;
+      
+      // Tentar obter detalhes do erro
+      try {
+        const contentType = response.headers.get('content-type');
+        
+        // Verificar se a resposta é JSON antes de tentar fazer o parse
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          console.error(`[API] Erro ao buscar produtos com termo "${term}": ${errorStatus}`, errorData);
+          
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } else {
+          const errorText = await response.text();
+          console.error(`[API] Erro não-JSON ao buscar produtos com termo "${term}" (${errorStatus}): ${errorText.substring(0, 200)}...`);
+          
+          // Tentar extrair mensagem de erro do HTML
+          if (contentType && contentType.includes('text/html')) {
+            // Extrair título do HTML
+            const titleMatch = errorText.match(/<title>(.*?)<\/title>/i);
+            if (titleMatch && titleMatch[1]) {
+              errorMessage = titleMatch[1];
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[API] Erro ao processar resposta de erro:`, e);
+      }
+      
+      // Tratar erros de autorização
+      if (errorStatus === 401 && typeof window !== 'undefined') {
+        console.error('[API] Token expirado ou inválido');
+        tokenStore.clearToken();
+        
+        // Se ainda temos tentativas disponíveis, aguardar e tentar novamente
+        if (retryCount < MAX_RETRIES) {
+          console.log(`[API] Tentando obter novo token e aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          
+          return searchProductsByTerm({
+            term,
+            page, 
+            limit,
+            warehouseName,
+            jwtToken: undefined, // Forçar obtenção de novo token
+            retryCount: retryCount + 1
+          });
+        }
+        
+        throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    // Verificar o tipo de conteúdo da resposta
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error(`[API] Resposta não é JSON (${contentType})`);
+      
+      // Se ainda temos tentativas disponíveis, aguardar um pouco e tentar novamente
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[API] Aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        
+        return searchProductsByTerm({
+          term,
+          page,
+          limit,
+          warehouseName,
+          jwtToken,
+          retryCount: retryCount + 1
+        });
+      }
+      
+      // Se for HTML, tentar extrair informações de erro
+      try {
+        const htmlContent = await response.text();
+        
+        // Tentar extrair título ou mensagem de erro
+        const titleMatch = htmlContent.match(/<title>(.*?)<\/title>/i);
+        if (titleMatch && titleMatch[1]) {
+          throw new Error(`Resposta HTML recebida: ${titleMatch[1]}`);
+        } else {
+          throw new Error(`Resposta não é JSON: ${contentType}`);
+        }
+      } catch (e) {
+        throw new Error(`Resposta não é JSON: ${contentType}`);
+      }
+    }
+    
+    // Clonar a resposta para processamento seguro em caso de erro
+    const clonedResponse = response.clone();
+    
+    // Processar a resposta
+    try {
+      const responseData = await response.json();
+      
+      // Verificar se temos dados válidos na resposta
+      let products: any[] = [];
+      
+      if (responseData && responseData.data && Array.isArray(responseData.data)) {
+        // Formato esperado: { data: [...] }
+        products = responseData.data;
+      } else if (Array.isArray(responseData)) {
+        // Formato alternativo: array direto
+        products = responseData;
+      } else {
+        // Tentar encontrar dados em outras propriedades possíveis
+        const possibleDataProps = ['products', 'items', 'results', 'content'];
+        
+        for (const prop of possibleDataProps) {
+          if (responseData[prop] && Array.isArray(responseData[prop])) {
+            products = responseData[prop];
+            console.log(`[API] Dados encontrados na propriedade "${prop}"`);
+            break;
+          }
+        }
+        
+        // Se ainda não encontramos, logar o problema e tentar usar o objeto inteiro
+        if (products.length === 0) {
+          console.error('[API] Formato de resposta inesperado:', JSON.stringify(responseData).substring(0, 300) + '...');
+          
+          // Verificar se o objeto em si pode ser tratado como um produto
+          if (responseData.id || responseData.sku || responseData.name) {
+            console.log('[API] Tratando objeto único como produto');
+            products = [responseData];
+          } else {
+            console.error('[API] Não foi possível encontrar dados de produtos na resposta');
+            return []; // Retornar array vazio
+          }
+        }
+      }
+      
+      console.log(`[API] ${products.length} produtos encontrados via busca por termo "${term}"`);
+      
+      // Processar produtos para garantir formato consistente
+      const processedProducts = products.map((item: any) => ({
+        id: item.sku || item.tinyId || item.id,
+        name: item.name || 'Produto sem nome',
+        description: item.description || '',
+        price: typeof item.price === 'number' ? item.price : parseFloat(item.price || '0'),
+        originalPrice: item.costPrice ? parseFloat(item.costPrice) : undefined,
+        imageUrl: item.images && item.images.length > 0 ? item.images[0] : '/placeholder.svg',
+        categoryId: item.categoryId || '',
+        category: item.category || undefined,
+        codigo: item.sku || '',
+        unidade: item.attributes?.unidade || 'UN',
+        active: item.active !== undefined ? item.active : true
+      }));
+      
+      // Retornar os dados processados
+      return processedProducts;
+    } catch (e) {
+      console.error(`[API] Erro ao processar resposta JSON:`, e);
+      
+      // Tentar diagnosticar o problema
+      try {
+        const rawText = await clonedResponse.text();
+        console.error('[API] Texto bruto da resposta:', rawText.substring(0, 500) + '...');
+        
+        // Se parece ser HTML, pode ser um problema de sessão/autenticação
+        if (rawText.includes('<!DOCTYPE html>') || rawText.includes('<html>')) {
+          if (rawText.includes('login') || rawText.includes('auth') || rawText.includes('session')) {
+            console.error('[API] Resposta HTML indica problema de autenticação');
+            
+            // Limpar token e tentar novamente se possível
+            if (typeof window !== 'undefined') {
+              tokenStore.clearToken();
+            }
+            
+            throw new Error('Sessão expirada ou token inválido');
+          } else {
+            throw new Error('Recebida uma página HTML em vez de dados JSON');
+          }
+        }
+      } catch (textError) {
+        console.error('[API] Erro ao obter texto bruto:', textError);
+      }
+      
+      throw new Error(`Erro ao processar JSON: ${e}`);
+    }
+  } catch (error) {
+    console.error(`[API] Erro ao buscar produtos com termo "${term}":`, error);
+    
+    // Se ainda temos tentativas disponíveis, aguardar um pouco e tentar novamente
+    if (retryCount < MAX_RETRIES) {
+      console.log(`[API] Erro na tentativa ${retryCount + 1}, aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+      
+      return searchProductsByTerm({
+        term,
+        page,
+        limit,
+        warehouseName,
+        jwtToken,
+        retryCount: retryCount + 1
+      });
+    }
+    
+    // Não propagar o erro, retornar array vazio em caso de erro
+    console.log('[API] Retornando array vazio após todas as tentativas falharem');
+    return [];
+  }
+}
+
+/**
+ * Busca produtos de um warehouse específico
+ * @param warehouseName Nome do warehouse (default: MKT-Creator)
+ * @param page Página de resultados (default: 0)
+ * @param limit Limite de resultados por página (default: 12)
+ * @param inStock Filtrar apenas produtos em estoque (default: true)
+ * @param active Filtrar apenas produtos ativos (default: true)
+ * @param term Termo para pesquisa de produtos (opcional)
+ */
+export async function searchWarehouseProducts({
+  warehouseName = 'MKT-Creator',
+  page = 0,
+  limit = 12,
+  inStock = true,
+  active = true,
+  term = ''
+}: {
+  warehouseName?: string;
+  page?: number;
+  limit?: number;
+  inStock?: boolean;
+  active?: boolean;
+  term?: string;
+} = {}) {
+  try {
+    const queryParams = new URLSearchParams({
+      warehouseName: warehouseName,
+      page: page.toString(),
+      limit: limit.toString(),
+      inStock: inStock.toString(),
+      active: active.toString()
+    });
+
+    // Adicionar o termo de busca se fornecido
+    if (term && term.trim()) {
+      queryParams.append('term', term.trim());
+      console.log(`[API] Buscando produtos com termo: "${term}" no warehouse: ${warehouseName}`);
+    }
+
+    // Utilizar a rota específica para busca de produtos por warehouse
+    const response = await fetch(`/api/marketing/products/warehouse/search?${queryParams.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Erro ao buscar produtos do warehouse:', error);
+      throw new Error(`Erro ao buscar produtos (${response.status}): ${error}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Erro ao buscar produtos do warehouse:', error);
     throw error;
   }
 }

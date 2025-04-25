@@ -22,11 +22,57 @@ export const TrueCore = {
    * Obtém a URL base da API True Core
    */
   getApiUrl(): string | null {
+    // Obter a URL da API das variáveis de ambiente
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    
     if (!apiUrl) {
+      console.error('[TrueCore] ERRO: URL da API True Core não configurada nas variáveis de ambiente');
+      console.error('[TrueCore] Verifique se NEXT_PUBLIC_API_URL está definida no arquivo .env.local');
       return null;
     }
+    
+    // Remover sufixo /api se presente
     return apiUrl.replace('/api', '');
+  },
+
+  /**
+   * Tenta processar uma resposta como JSON mesmo quando o Content-Type não é application/json
+   * @param response Resposta do fetch para tentar processar como JSON
+   */
+  async tryParseAsJson(response: Response): Promise<any> {
+    try {
+      // Verificar se a resposta já tem Content-Type JSON
+      const contentType = response.headers.get('content-type') || '';
+      
+      // Se já é JSON, usar o método .json()
+      if (contentType.includes('application/json')) {
+        return await response.json();
+      }
+      
+      // Caso contrário, obter o texto e tentar fazer parse manualmente
+      const text = await response.text();
+      
+      // Verificar se parece ser JSON (começa com { ou [ e termina com } ou ])
+      if ((text.trim().startsWith('{') || text.trim().startsWith('[')) &&
+          (text.trim().endsWith('}') || text.trim().endsWith(']'))) {
+        
+        console.log('[TrueCore] Detectado conteúdo que parece ser JSON com Content-Type incorreto');
+        try {
+          return JSON.parse(text);
+        } catch (parseError) {
+          console.error('[TrueCore] Falha ao fazer parse do texto como JSON:', parseError);
+          throw new Error('Conteúdo parece ser JSON, mas falhou ao fazer parse');
+        }
+      }
+      
+      // Se não parece ser JSON, lançar erro
+      console.error('[TrueCore] Conteúdo não parece ser JSON');
+      console.error('[TrueCore] Trecho do conteúdo:', text.substring(0, 200));
+      throw new Error('Conteúdo não parece ser JSON');
+    } catch (error) {
+      console.error('[TrueCore] Erro ao tentar processar resposta como JSON:', error);
+      throw error;
+    }
   },
 
   /**
@@ -98,7 +144,7 @@ export const TrueCore = {
         const status = response.status;
         
         try {
-          const errorData = await response.json();
+          const errorData = await this.tryParseAsJson(response);
           return NextResponse.json(errorData, { status });
         } catch {
           return NextResponse.json(
@@ -109,7 +155,7 @@ export const TrueCore = {
       }
 
       // Tentar obter a resposta como JSON
-      const data = await response.json();
+      const data = await this.tryParseAsJson(response);
       return NextResponse.json(data);
       
     } catch (error) {
@@ -245,7 +291,7 @@ export const TrueCore = {
         console.error(`[Auth] Erro na autenticação: status ${errorStatus}`);
         
         try {
-          const errorData = await response.json();
+          const errorData = await this.tryParseAsJson(response);
           console.error('[Auth] Detalhes do erro:', JSON.stringify(errorData));
           return NextResponse.json(errorData, { status: errorStatus });
         } catch {
@@ -257,7 +303,7 @@ export const TrueCore = {
       }
 
       // Obter os dados da resposta
-      const responseData = await response.json();
+      const responseData = await this.tryParseAsJson(response);
       console.log('[Auth] Autenticação bem-sucedida');
       
       if (!responseData.access_token) {
@@ -408,7 +454,7 @@ export const TrueCore = {
       // Obter os dados da resposta
       let responseData;
       try {
-        responseData = await response.json();
+        responseData = await this.tryParseAsJson(response);
       } catch (e) {
         console.error('[Auth] Erro ao fazer parse da resposta JSON:', e);
         return NextResponse.json(
@@ -598,20 +644,20 @@ export const TrueCore = {
             const customer = await customerResponse.json();
             
             if (customer && customer.__category__) {
-              const categoryName = customer.__category__.name;
-              console.log(`[TrueCore] Categoria do cliente: ${categoryName}`);
+              const customerCategory = customer.__category__.name;
+              console.log(`[TrueCore] Categoria do cliente: ${customerCategory}`);
               
               // Definir o warehouseName com base na categoria do cliente - exatamente como esperado pela API
-              if (categoryName.includes('Creator')) {
+              if (customerCategory.startsWith('Creator') || customerCategory === 'MKT-Creator') {
                 warehouseName = 'MKT-Creator';
                 console.log(`[TrueCore] Cliente da categoria Creator, usando warehouse: ${warehouseName}`);
-              } else if (categoryName.includes('Top Master')) {
+              } else if (customerCategory.includes('Top Master') || customerCategory === 'MKT-Top Master') {
                 warehouseName = 'MKT-Top Master';
                 console.log(`[TrueCore] Cliente da categoria Top Master, usando warehouse: ${warehouseName}`);
               } else {
                 // Categoria padrão para outros tipos
                 warehouseName = 'geral';
-                console.log(`[TrueCore] Outra categoria de cliente, usando warehouse: ${warehouseName}`);
+                console.log(`[TrueCore] Outra categoria de cliente (${customerCategory}), usando warehouse: ${warehouseName}`);
               }
               
               // Aplicar o filtro de warehouse
@@ -672,7 +718,7 @@ export const TrueCore = {
         const status = response.status;
         
         try {
-          const errorData = await response.json();
+          const errorData = await this.tryParseAsJson(response);
           console.error('[TrueCore] Erro da API True Core:', errorData);
           return NextResponse.json(errorData, { status });
         } catch {
@@ -684,7 +730,7 @@ export const TrueCore = {
       }
 
       // Tentar obter a resposta como JSON
-      const data = await response.json();
+      const data = await this.tryParseAsJson(response);
       
       // Log de informações sobre os produtos obtidos
       if (data && data.data && Array.isArray(data.data)) {
@@ -753,7 +799,7 @@ export const TrueCore = {
         console.error(`[TrueCore] Erro ao buscar categorias: status ${status}`);
         
         try {
-          const errorData = await response.json();
+          const errorData = await this.tryParseAsJson(response);
           console.error('[TrueCore] Detalhes do erro:', JSON.stringify(errorData));
           return NextResponse.json(errorData, { status });
         } catch (e) {
@@ -771,7 +817,7 @@ export const TrueCore = {
       
       let data;
       try {
-        data = JSON.parse(responseText);
+        data = await this.tryParseAsJson(response);
       } catch (e) {
         console.error('[TrueCore] Erro ao fazer parse da resposta JSON:', e);
         return NextResponse.json(
@@ -899,7 +945,7 @@ export const TrueCore = {
         console.error(`[TrueCore] Erro ao buscar cliente: status ${status}`);
         
         try {
-          const errorData = await response.json();
+          const errorData = await this.tryParseAsJson(response);
           console.error('[TrueCore] Detalhes do erro:', JSON.stringify(errorData));
           return NextResponse.json(errorData, { status });
         } catch (e) {
@@ -924,20 +970,69 @@ export const TrueCore = {
       const responseText = await response.text();
       console.log(`[TrueCore] Resposta bruta: ${responseText.substring(0, 200)}...`);
       
+      // Fazer parse do texto da resposta diretamente, em vez de tentar ler o corpo novamente
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        console.error('[TrueCore] Erro ao fazer parse da resposta JSON:', e);
+        console.error('[TrueCore] Erro ao fazer parse do texto como JSON:', e);
         return NextResponse.json(
           { error: 'Formato de resposta inválido - não foi possível fazer parse do JSON' },
           { status: 500 }
         );
       }
       
-      console.log(`[TrueCore] Cliente encontrado: ${data.name} (ID: ${data.id})`);
+      // Verificar se o cliente foi encontrado
+      if (!data) {
+        console.error('[TrueCore] Resposta vazia ao buscar cliente');
+        return NextResponse.json(
+          { error: 'Cliente não encontrado' },
+          { status: 404 }
+        );
+      }
       
-      return NextResponse.json(data);
+      // Normalizar a resposta: garantir que __category__ e outros campos estejam no nível raiz
+      const normalizedData: any = { ...data };
+      
+      // Se os dados vêm dentro da propriedade "data", mover para o nível raiz
+      if (data.data && typeof data.data === 'object') {
+        Object.assign(normalizedData, data.data);
+        console.log('[TrueCore] Normalizada estrutura data → raiz');
+      }
+      
+      // Se a categoria estiver apenas como string no campo "category"
+      if (normalizedData.category && typeof normalizedData.category === 'string' && !normalizedData.__category__) {
+        normalizedData.__category__ = { name: normalizedData.category };
+        console.log(`[TrueCore] Normalizada categoria: ${normalizedData.category} → __category__`);
+      }
+      
+      // Verificar se temos __category__ definido e ajustar para o formato esperado
+      if (normalizedData.__category__ && typeof normalizedData.__category__ === 'string') {
+        normalizedData.__category__ = { name: normalizedData.__category__ };
+        console.log(`[TrueCore] Convertido __category__ de string para objeto com nome`);
+      }
+      
+      // Identificar o tipo de cliente baseado na categoria
+      if (normalizedData.__category__ && normalizedData.__category__.name) {
+        const categoryName = normalizedData.__category__.name;
+        
+        if (categoryName.startsWith('Creator')) {
+          console.log('[TrueCore] Cliente identificado como Creator');
+          normalizedData.clientGroup = 'Creator';
+        } else if (categoryName.includes('Top Master')) {
+          console.log('[TrueCore] Cliente identificado como Top Master');
+          normalizedData.clientGroup = 'Top Master';
+        } else {
+          console.log(`[TrueCore] Cliente com categoria não classificada: ${categoryName}`);
+          normalizedData.clientGroup = 'Outro';
+        }
+      }
+      
+      // Log da estrutura final
+      console.log(`[TrueCore] Cliente encontrado e normalizado: ${normalizedData.name || data.name} (ID: ${normalizedData.id || data.id})`);
+      console.log('[TrueCore] Categoria:', normalizedData.__category__ ? normalizedData.__category__.name : 'Não definida');
+      
+      return NextResponse.json(normalizedData);
     } catch (error) {
       console.error('[TrueCore] Erro ao processar busca de cliente:', error);
       return NextResponse.json(
@@ -999,7 +1094,7 @@ export const TrueCore = {
         console.error(`[TrueCore] Erro ao buscar limites: status ${status}`);
         
         try {
-          const errorData = await response.json();
+          const errorData = await this.tryParseAsJson(response);
           console.error('[TrueCore] Detalhes do erro:', JSON.stringify(errorData));
           return NextResponse.json(errorData, { status });
         } catch (e) {
@@ -1015,11 +1110,12 @@ export const TrueCore = {
       const responseText = await response.text();
       console.log(`[TrueCore] Resposta bruta: ${responseText.substring(0, 200)}...`);
       
+      // Fazer parse do texto da resposta diretamente, em vez de tentar ler o corpo novamente
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        console.error('[TrueCore] Erro ao fazer parse da resposta JSON:', e);
+        console.error('[TrueCore] Erro ao fazer parse do texto como JSON:', e);
         return NextResponse.json(
           { error: 'Formato de resposta inválido - não foi possível fazer parse do JSON' },
           { status: 500 }
@@ -1035,6 +1131,260 @@ export const TrueCore = {
         { error: 'Erro interno ao processar requisição de limites' },
         { status: 500 }
       );
+    }
+  },
+
+  // Método para buscar dados do cliente por ID
+  getCustomerById: async (customerId: string | number, token: string) => {
+    try {
+      console.log(`[TrueCore] Buscando dados do cliente ID: ${customerId}`);
+      
+      const apiUrl = TrueCore.getApiUrl();
+      if (!apiUrl) {
+        console.error('[TrueCore] URL da API não configurada');
+        return null;
+      }
+      
+      const url = `${apiUrl}/marketing/customers/${customerId}`;
+      console.log(`[TrueCore] Fazendo requisição para: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        cache: 'no-store'
+      });
+      
+      if (!response.ok) {
+        console.error(`[TrueCore] Erro ao buscar cliente: ${response.status}`);
+        
+        // Verificar o tipo de conteúdo da resposta de erro
+        const contentType = response.headers.get('content-type');
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            console.error(`[TrueCore] Detalhe do erro JSON: ${JSON.stringify(errorData)}`);
+          } else {
+            const errorText = await response.text();
+            console.error(`[TrueCore] Resposta não-JSON: ${errorText.substring(0, 200)}...`);
+            
+            if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html>')) {
+              console.error('[TrueCore] Resposta HTML detectada, verificar endpoint e autenticação');
+            }
+          }
+        } catch (e) {
+          console.error(`[TrueCore] Erro ao ler detalhes da resposta: ${e}`);
+        }
+        
+        return null;
+      }
+      
+      // Verificar tipo de conteúdo da resposta
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error(`[TrueCore] Resposta não é JSON! Tipo: ${contentType}`);
+        try {
+          const text = await response.text();
+          console.error(`[TrueCore] Conteúdo não-JSON: ${text.substring(0, 200)}...`);
+        } catch (e) {
+          console.error(`[TrueCore] Erro ao ler texto da resposta: ${e}`);
+        }
+        return null;
+      }
+      
+      try {
+        const data = await response.json();
+        console.log(`[TrueCore] Cliente encontrado: ${data.name || 'Sem nome'}`);
+        return data;
+      } catch (e) {
+        console.error(`[TrueCore] Erro ao fazer parse JSON da resposta: ${e}`);
+        return null;
+      }
+    } catch (error) {
+      console.error('[TrueCore] Erro ao buscar cliente:', error);
+      return null;
+    }
+  },
+  
+  // Método para buscar a categoria do cliente
+  getCustomerCategory: async (customerId: string | number, token: string) => {
+    try {
+      console.log(`[TrueCore] Buscando categoria do cliente ID: ${customerId}`);
+      
+      const apiUrl = TrueCore.getApiUrl();
+      if (!apiUrl) {
+        console.error('[TrueCore] URL da API não configurada');
+        return null;
+      }
+      
+      const url = `${apiUrl}/marketing/customers/${customerId}/category`;
+      console.log(`[TrueCore] Fazendo requisição para: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        cache: 'no-store'
+      });
+      
+      if (!response.ok) {
+        console.error(`[TrueCore] Erro ao buscar categoria do cliente: ${response.status}`);
+        
+        // Verificar o tipo de conteúdo da resposta de erro
+        const contentType = response.headers.get('content-type');
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            console.error(`[TrueCore] Detalhe do erro JSON: ${JSON.stringify(errorData)}`);
+          } else {
+            const errorText = await response.text();
+            console.error(`[TrueCore] Resposta não-JSON: ${errorText.substring(0, 200)}...`);
+            
+            if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html>')) {
+              console.error('[TrueCore] Resposta HTML detectada, verificar endpoint e autenticação');
+            }
+          }
+        } catch (e) {
+          console.error(`[TrueCore] Erro ao ler detalhes da resposta: ${e}`);
+        }
+        
+        return null;
+      }
+      
+      // Verificar tipo de conteúdo da resposta
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error(`[TrueCore] Resposta não é JSON! Tipo: ${contentType}`);
+        try {
+          const text = await response.text();
+          console.error(`[TrueCore] Conteúdo não-JSON: ${text.substring(0, 200)}...`);
+        } catch (e) {
+          console.error(`[TrueCore] Erro ao ler texto da resposta: ${e}`);
+        }
+        return null;
+      }
+      
+      try {
+        const data = await response.json();
+        
+        if (data && data.name) {
+          console.log(`[TrueCore] Categoria do cliente encontrada: ${data.name}`);
+          return data;
+        }
+        
+        // Se não recebemos a estrutura esperada, verificar se temos dados no próprio cliente
+        console.log('[TrueCore] Estrutura de categoria não encontrada, buscando cliente completo');
+        
+        const customerData = await TrueCore.getCustomerById(customerId, token);
+        if (customerData && customerData.category) {
+          console.log(`[TrueCore] Categoria extraída do cliente: ${customerData.category}`);
+          return { 
+            name: customerData.category,
+            id: customerData.categoryId || 'default'
+          };
+        }
+        
+        console.log('[TrueCore] Nenhuma informação de categoria encontrada');
+        return null;
+      } catch (e) {
+        console.error(`[TrueCore] Erro ao fazer parse JSON da resposta: ${e}`);
+        return null;
+      }
+    } catch (error) {
+      console.error('[TrueCore] Erro ao buscar categoria do cliente:', error);
+      return null;
+    }
+  },
+
+  // Método para buscar os limites de pedido de um cliente
+  getCustomerOrderLimits: async (customerId: string | number, token: string) => {
+    try {
+      console.log(`[TrueCore] Buscando limites de pedido para cliente ID: ${customerId}`);
+      
+      const apiUrl = TrueCore.getApiUrl();
+      if (!apiUrl) {
+        console.error('[TrueCore] URL da API não configurada');
+        return null;
+      }
+      
+      const url = `${apiUrl}/marketing/customers/${customerId}/order-limits`;
+      console.log(`[TrueCore] Fazendo requisição para: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        cache: 'no-store'
+      });
+      
+      console.log(`[TrueCore] Status da resposta: ${response.status} ${response.statusText}`);
+      console.log(`[TrueCore] Tipo de conteúdo: ${response.headers.get('content-type')}`);
+      
+      if (!response.ok) {
+        console.error(`[TrueCore] Erro ao buscar limites de pedido: ${response.status}`);
+        
+        // Verificar o tipo de conteúdo da resposta de erro
+        const contentType = response.headers.get('content-type');
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            console.error(`[TrueCore] Detalhe do erro JSON: ${JSON.stringify(errorData)}`);
+          } else {
+            const errorText = await response.text();
+            console.error(`[TrueCore] Resposta não-JSON: ${errorText.substring(0, 200)}...`);
+            
+            if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html>')) {
+              console.error('[TrueCore] Resposta HTML detectada, verificar endpoint e autenticação');
+            }
+          }
+        } catch (e) {
+          console.error(`[TrueCore] Erro ao ler detalhes da resposta: ${e}`);
+        }
+        
+        return null;
+      }
+      
+      // Verificar tipo de conteúdo da resposta
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error(`[TrueCore] Resposta não é JSON! Tipo: ${contentType}`);
+        try {
+          const text = await response.text();
+          console.error(`[TrueCore] Conteúdo não-JSON: ${text.substring(0, 200)}...`);
+        } catch (e) {
+          console.error(`[TrueCore] Erro ao ler texto da resposta: ${e}`);
+        }
+        return null;
+      }
+      
+      try {
+        const responseText = await response.text();
+        console.log(`[TrueCore] Resposta bruta (primeiros 200 caracteres): ${responseText.substring(0, 200)}...`);
+        
+        const data = JSON.parse(responseText);
+        console.log(`[TrueCore] Limites de pedido encontrados para cliente: ${customerId}`);
+        
+        if (data && data.customer) {
+          console.log(`[TrueCore] Cliente dos limites: ${data.customer.name || 'Nome não disponível'}`);
+        }
+        
+        return data;
+      } catch (e) {
+        console.error(`[TrueCore] Erro ao fazer parse JSON da resposta: ${e}`);
+        return null;
+      }
+    } catch (error) {
+      console.error('[TrueCore] Erro ao buscar limites de pedido:', error);
+      return null;
     }
   }
 }; 

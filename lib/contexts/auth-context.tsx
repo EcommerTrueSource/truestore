@@ -15,9 +15,22 @@ import { authService, User } from '@/lib/services/auth-service';
 import { tokenStore } from '@/lib/token-store';
 import { setAuth } from '@/lib/api-helpers';
 import { LogOut } from 'lucide-react';
+import { fetchCustomerByClerkId } from '@/lib/api';
+
+// Estender a interface User para incluir propriedades adicionais necessárias
+export interface UserExtended extends User {
+	loading?: boolean;
+	data?: any;
+	error?: string;
+	id: string;
+	name: string;
+	email: string;
+	role: string;
+	imageUrl?: string;
+}
 
 export interface AuthContextType {
-	user: User | null;
+	user: UserExtended | null;
 	isLoading: boolean;
 	isAuthenticated: boolean;
 	isReady: boolean;
@@ -26,6 +39,23 @@ export interface AuthContextType {
 	getJwtToken: () => Promise<string | null>;
 	getApiToken: () => Promise<string | null>;
 	forceRefresh: () => Promise<void>;
+}
+
+// Helper para dispatch de eventos personalizados
+function dispatchCustomEvent(eventName: string, detail?: any) {
+	if (typeof window !== 'undefined') {
+		window.dispatchEvent(new CustomEvent(eventName, { detail }));
+	}
+}
+
+// Estender a interface Window para incluir Clerk
+declare global {
+	interface Window {
+		Clerk?: {
+			isSignedIn: () => Promise<boolean>;
+			user?: { id?: string };
+		};
+	}
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -49,7 +79,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 	const { user: clerkUser, isLoaded, isSignedIn } = useUser();
 	const { signOut } = useClerk();
 	const { isLoaded: isAuthLoaded, getToken } = useClerkAuth();
-	const [user, setUser] = useState<User | null>(null);
+	const [user, setUser] = useState<UserExtended | null>(null);
 	const [isLoading, setIsLoading] = useState<boolean>(true);
 	const [tokenRenewalJob, setTokenRenewalJob] = useState<NodeJS.Timeout | null>(
 		null
@@ -57,7 +87,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [isReady, setIsReady] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [isClient, setIsClient] = useState(false);
 	const router = useRouter();
+
+	// Verificar se estamos no cliente ou no servidor
+	useEffect(() => {
+		setIsClient(true);
+	}, []);
 
 	/**
 	 * Obter token JWT do Clerk
@@ -616,6 +652,228 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 			window.removeEventListener('auth:login-complete', handleLoginComplete);
 		};
 	}, [forceRefresh, getApiToken, user]);
+
+	// Inicializar dados do usuário após autenticação bem-sucedida
+	const initializeUserData = async (userId: string) => {
+		try {
+			setIsLoading(true);
+
+			if (!userId) {
+				console.error('[AUTH] ID de usuário não fornecido para inicialização');
+				return;
+			}
+
+			// Salvar o ID do Clerk no localStorage para futuras referências
+			localStorage.setItem('clerk_user_id', userId);
+			console.log(`[AUTH] ID do Clerk salvo no localStorage: ${userId}`);
+
+			// Obter o token JWT do Clerk
+			const token = await getJwtToken();
+			if (!token) {
+				console.error('[AuthContext] Token JWT não disponível');
+				return;
+			}
+
+			// Obter o token da API True Core
+			await getApiToken();
+
+			// Buscar dados do cliente pelo ID do Clerk
+			try {
+				const customerData = await fetchCustomerByClerkId(
+					userId,
+					tokenStore.getToken() || undefined
+				);
+
+				if (customerData) {
+					console.log(
+						'[AuthContext] Dados do cliente obtidos:',
+						customerData.name
+					);
+
+					// Definir o warehouse com base na categoria do cliente
+					if (customerData.__category__) {
+						const categoryName = customerData.__category__.name;
+
+						// Salvar a categoria do cliente para verificação no futuro
+						localStorage.setItem('customer_category', categoryName);
+
+						// Definir o warehouse com base na categoria
+						if (categoryName.includes('Creator')) {
+							localStorage.setItem('warehouse_name', 'MKT-Creator');
+							console.log('[AuthContext] Cliente definido como Creator');
+						} else if (categoryName.includes('Top Master')) {
+							localStorage.setItem('warehouse_name', 'MKT-Top Master');
+							console.log('[AuthContext] Cliente definido como Top Master');
+						} else {
+							// Categoria padrão
+							localStorage.setItem('warehouse_name', 'MKT-Creator');
+							console.log(
+								'[AuthContext] Categoria não específica, usando Creator como padrão'
+							);
+						}
+					}
+
+					// Atualizar dados do usuário no estado
+					setUser({
+						id: userId,
+						name: customerData.name || 'Usuário',
+						email: customerData.email || 'usuario@truestore.com',
+						role: 'user',
+						data: customerData,
+						loading: false,
+					});
+
+					// Disparar evento indicando que os dados do usuário foram carregados
+					dispatchCustomEvent('user:data-loaded', {
+						userId,
+						data: customerData,
+					});
+				} else {
+					console.log('[AuthContext] Cliente não encontrado pelo ID do Clerk');
+					setUser({
+						id: userId,
+						name: 'Usuário',
+						email: 'usuario@truestore.com',
+						role: 'user',
+						loading: false,
+					});
+				}
+			} catch (error) {
+				console.error('[AuthContext] Erro ao buscar cliente:', error);
+				setUser({
+					id: userId,
+					name: 'Usuário',
+					email: 'usuario@truestore.com',
+					role: 'user',
+					loading: false,
+					error: 'Erro ao carregar dados do cliente',
+				});
+			}
+		} catch (error) {
+			console.error('[AuthContext] Erro em initializeUserData:', error);
+			setUser({
+				id: userId,
+				name: 'Usuário',
+				email: 'usuario@truestore.com',
+				role: 'user',
+				loading: false,
+				error: 'Erro ao inicializar dados do usuário',
+			});
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	// Monitorar alterações no estado de autenticação
+	useEffect(() => {
+		if (isClient) {
+			// Verificar autenticação ao montar o componente
+			checkAuthentication();
+
+			// Adicionar listener para eventos de auth
+			const handleClerkLoaded = () => {
+				console.log(
+					'[AuthContext] Clerk carregado, verificando autenticação...'
+				);
+				checkAuthentication();
+			};
+
+			// Adicionar listener para alterações de sessão
+			const handleActiveSessionChanged = (data: any) => {
+				console.log('[AuthContext] Sessão ativa alterada:', data);
+				// Recarregar o estado de autenticação após alteração de sessão
+				checkAuthentication();
+
+				// Se temos uma sessão ativa e um ID de usuário, inicializar dados do usuário
+				if (data?.userId) {
+					console.log(
+						'[AuthContext] Inicializando dados do usuário após mudança de sessão'
+					);
+					initializeUserData(data.userId);
+				}
+			};
+
+			// Escutar eventos do Clerk
+			window.addEventListener('clerk:loaded', handleClerkLoaded);
+			window.addEventListener(
+				'clerk:session:active:changed',
+				handleActiveSessionChanged
+			);
+
+			// Remover listeners ao desmontar
+			return () => {
+				window.removeEventListener('clerk:loaded', handleClerkLoaded);
+				window.removeEventListener(
+					'clerk:session:active:changed',
+					handleActiveSessionChanged
+				);
+			};
+		}
+	}, [isClient]);
+
+	// Handle changes to authentication state
+	const checkAuthentication = async () => {
+		try {
+			if (typeof window === 'undefined') {
+				console.log(
+					'[AuthContext] Não estamos no cliente, não podemos verificar a autenticação'
+				);
+				return;
+			}
+
+			if (!window.Clerk) {
+				// Clerk ainda não inicializado
+				console.log('[AuthContext] Clerk ainda não inicializado');
+				setIsLoading(true);
+				return;
+			}
+
+			// Verificar se há uma sessão ativa
+			const authenticated = await window.Clerk.isSignedIn();
+
+			if (authenticated) {
+				// Obter o ID do usuário
+				const user = window.Clerk.user;
+				const userId = user?.id;
+
+				console.log(`[AuthContext] Usuário autenticado: ${userId}`);
+
+				// Atualizar estado para refletir autenticação
+				setIsAuthenticated(true);
+				setIsLoading(false);
+
+				// Inicializar dados do usuário
+				if (userId) {
+					initializeUserData(userId);
+				}
+
+				// Disparar evento informando que a autenticação está pronta
+				dispatchCustomEvent('auth:ready', {
+					isAuthenticated: true,
+					userId: userId,
+				});
+			} else {
+				console.log('[AuthContext] Usuário não autenticado');
+				setIsAuthenticated(false);
+				setIsLoading(false);
+
+				// Disparar evento informando que a autenticação está pronta
+				dispatchCustomEvent('auth:ready', {
+					isAuthenticated: false,
+				});
+			}
+		} catch (error) {
+			console.error('[AuthContext] Erro ao verificar autenticação:', error);
+			setIsAuthenticated(false);
+			setIsLoading(false);
+
+			// Disparar evento informando que a autenticação está pronta (com erro)
+			dispatchCustomEvent('auth:ready', {
+				isAuthenticated: false,
+				hasError: true,
+			});
+		}
+	};
 
 	return (
 		<AuthContext.Provider

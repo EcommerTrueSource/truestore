@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import StoreLayout from '@/components/layouts/store-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,58 +14,39 @@ import {
 } from 'lucide-react';
 import { ProductCard } from '@/components/product/product-card';
 import { ProductFilters } from '@/components/product/product-filters';
-import { fetchProducts, searchProducts } from '@/lib/api';
+import { searchProducts, searchWarehouseProducts } from '@/lib/api';
 import type { Product } from '@/types/product';
 import { useCategories } from '@/lib/contexts/categories-context';
 import { useAuth } from '@/lib/contexts/auth-context';
-import { authService } from '@/lib/services/auth-service';
 import { tokenStore } from '@/lib/token-store';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CategorySidebar } from '@/components/category/category-sidebar';
 
-// Número de produtos por página
+// Constantes de configuração
 const PRODUCTS_PER_PAGE = 12;
-// Limite máximo de produtos que a API pode retornar por requisição
-const MAX_API_PRODUCTS = 120;
 
 /**
  * Componente para verificar token e controlar carregamento da página
  */
 const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 	const [verificationComplete, setVerificationComplete] = useState(false);
-	const [categoriesReady, setCategoriesReady] = useState(false);
-	const [loginBlocked, setLoginBlocked] = useState(false);
 	const router = useRouter();
-
-	// Verificar o estado inicial do bloqueio de login
-	useEffect(() => {
-		if (typeof window !== 'undefined') {
-			const loginAttempted = sessionStorage.getItem('login_attempted');
-			setLoginBlocked(!!loginAttempted);
-		}
-	}, []);
 
 	// Verificar token e decidir o fluxo de carregamento
 	useEffect(() => {
-		// Verificar apenas uma vez para evitar loops
 		if (verificationComplete) return;
 
 		const checkToken = async () => {
 			try {
-				console.log('[Store:TokenVerifier] Verificando token...');
-
-				// Verificar se temos um token válido no TokenStore ou em cookies
+				// Verificar se temos um token válido
 				if (tokenStore.hasValidToken()) {
-					console.log(
-						'[Store:TokenVerifier] Token válido encontrado no TokenStore'
-					);
-					tokenStore.resetReloadTracker();
+					console.log('[Store:TokenVerifier] Token válido encontrado');
 					setVerificationComplete(true);
 					onReady();
 					return true;
 				}
 
-				// Verificar se há token em cookies - importante para login por email
+				// Verificar se há token em cookies
 				if (typeof document !== 'undefined') {
 					const cookies = document.cookie.split(';');
 					const tokenCookie = cookies.find((c) =>
@@ -73,61 +54,9 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 					);
 
 					if (tokenCookie) {
-						console.log('[Store:TokenVerifier] Token encontrado em cookies');
-						// Extrair e armazenar no TokenStore para uso em toda a aplicação
-						const extractedToken = tokenCookie.split('=')[1].trim();
-						if (extractedToken) {
-							tokenStore.setToken(extractedToken, 86400); // 24 horas
-							console.log(
-								'[Store:TokenVerifier] Token do cookie armazenado no TokenStore'
-							);
-						}
-
-						tokenStore.resetReloadTracker();
-						setVerificationComplete(true);
-						onReady();
-						return true;
-					}
-				}
-
-				// Verificar se acabamos de fazer login
-				const fromLogin = sessionStorage.getItem('from_login');
-				if (fromLogin) {
-					console.log('[Store:TokenVerifier] Acesso pós-login detectado');
-					sessionStorage.removeItem('from_login');
-
-					// Verificar token após um breve atraso (aguardar eventos auth:login-complete)
-					// Aumento do atraso para login por email que pode ser mais demorado
-					await new Promise((resolve) => setTimeout(resolve, 1200));
-
-					// Verificar novamente TokenStore após o atraso
-					if (tokenStore.hasValidToken()) {
-						console.log(
-							'[Store:TokenVerifier] Token válido encontrado após login'
-						);
-						tokenStore.resetReloadTracker();
-						setVerificationComplete(true);
-						onReady();
-						return true;
-					}
-
-					// Verificar cookies novamente (principalmente para login por email)
-					const cookies = document.cookie.split(';');
-					const tokenCookie = cookies.find((c) =>
-						c.trim().startsWith('true_core_token=')
-					);
-
-					if (tokenCookie) {
-						console.log(
-							'[Store:TokenVerifier] Token encontrado em cookies após atraso'
-						);
-						// Extrair e armazenar no TokenStore
 						const extractedToken = tokenCookie.split('=')[1].trim();
 						if (extractedToken) {
 							tokenStore.setToken(extractedToken, 86400);
-							console.log(
-								'[Store:TokenVerifier] Token do cookie armazenado no TokenStore'
-							);
 							setVerificationComplete(true);
 							onReady();
 							return true;
@@ -135,64 +64,32 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 					}
 				}
 
-				// Verificar se há parâmetros de URL que indicam navegação intencional
-				const url = new URL(window.location.href);
-				const hasCategory = url.searchParams.has('category');
-				const hasSearch = url.searchParams.has('search');
-				const hasSort = url.searchParams.has('sort');
-				const hasIntentionalNavigation = hasCategory || hasSearch || hasSort;
+				// Se não temos token, aguardar um momento e tentar novamente
+				console.log(
+					'[Store:TokenVerifier] Token não encontrado, tentando novamente em 1.5s...'
+				);
+				setTimeout(async () => {
+					// Verificar novamente após o atraso
+					if (tokenStore.hasValidToken()) {
+						console.log(
+							'[Store:TokenVerifier] Token válido encontrado após tentativa adicional'
+						);
+						setVerificationComplete(true);
+						onReady();
+						return true;
+					}
 
-				// Verificar bloqueio de login
-				if (loginBlocked) {
+					// Se ainda não temos token, redirecionar para login
 					console.log(
-						'[Store:TokenVerifier] Tentativa anterior de login detectada'
+						'[Store:TokenVerifier] Token não encontrado mesmo após tentativas adicionais'
 					);
 					router.push('/login');
 					return false;
-				}
+				}, 1500);
 
-				// Adicionar um atraso para dar tempo ao token ser carregado
-				await new Promise((resolve) => setTimeout(resolve, 1200));
-
-				// Verificar token novamente após o atraso
-				if (tokenStore.hasValidToken()) {
-					console.log(
-						'[Store:TokenVerifier] Token válido encontrado após atraso'
-					);
-					tokenStore.resetReloadTracker();
-					setVerificationComplete(true);
-					onReady();
-					return true;
-				}
-
-				// Se não tem token e não tem parâmetros específicos
-				if (!hasIntentionalNavigation) {
-					if (tokenStore.trackReload(1)) {
-						// Apenas 1 tentativa de recarga
-						console.log(
-							'[Store:TokenVerifier] Tentando recarregar para recuperar token...'
-						);
-						window.location.reload();
-						return false;
-					} else {
-						console.log(
-							'[Store:TokenVerifier] Limite de recargas atingido, redirecionando para login'
-						);
-						sessionStorage.setItem('login_attempted', 'true');
-						setLoginBlocked(true);
-						router.push('/login');
-						return false;
-					}
-				} else {
-					console.log(
-						'[Store:TokenVerifier] Navegação com filtros detectada, sem recarga'
-					);
-					setVerificationComplete(true);
-					onReady();
-					return true;
-				}
+				return false;
 			} catch (error) {
-				console.error('[Store:TokenVerifier] Erro ao verificar token:', error);
+				console.error('[Store:TokenVerifier] Erro:', error);
 				setVerificationComplete(true);
 				onReady();
 				return false;
@@ -200,92 +97,9 @@ const TokenVerifier = ({ onReady }: { onReady: () => void }) => {
 		};
 
 		checkToken();
-	}, [verificationComplete, router, loginBlocked, onReady]);
+	}, [verificationComplete, router, onReady]);
 
-	// Monitorar evento de carregamento de categorias completo
-	useEffect(() => {
-		if (typeof window === 'undefined') return;
-
-		const handleCategoriesLoaded = () => {
-			console.log('[Store:TokenVerifier] Evento categories:loaded recebido');
-			setCategoriesReady(true);
-		};
-
-		window.addEventListener('categories:loaded', handleCategoriesLoaded);
-
-		// Verificar se categorias já estão carregadas
-		const checkExistingCategories = () => {
-			const categoriesData = localStorage.getItem(
-				'true-store-categories-cache'
-			);
-			if (categoriesData) {
-				try {
-					const { data } = JSON.parse(categoriesData);
-					if (Array.isArray(data) && data.length > 0) {
-						console.log(
-							'[Store:TokenVerifier] Categorias já disponíveis em cache'
-						);
-						setCategoriesReady(true);
-					}
-				} catch (e) {
-					console.error(
-						'[Store:TokenVerifier] Erro ao verificar cache de categorias:',
-						e
-					);
-				}
-			}
-		};
-
-		checkExistingCategories();
-
-		return () => {
-			window.removeEventListener('categories:loaded', handleCategoriesLoaded);
-		};
-	}, []);
-
-	// Adicionar listeners para eventos de autenticação
-	useEffect(() => {
-		if (typeof window === 'undefined') return;
-
-		// Handler para o evento de conclusão de login
-		const handleLoginComplete = () => {
-			console.log('[Store:TokenVerifier] Evento auth:login-complete recebido');
-			sessionStorage.setItem('from_login', 'true');
-			sessionStorage.removeItem('login_attempted');
-			setLoginBlocked(false);
-			setVerificationComplete(true);
-		};
-
-		// Handler para o evento de atualização de estado de autenticação
-		const handleAuthStateUpdated = () => {
-			console.log('[Store:TokenVerifier] Evento auth:state-updated recebido');
-			tokenStore.resetReloadTracker();
-			sessionStorage.removeItem('login_attempted');
-			setLoginBlocked(false);
-		};
-
-		// Registrar os listeners
-		window.addEventListener('auth:login-complete', handleLoginComplete);
-		window.addEventListener('auth:state-updated', handleAuthStateUpdated);
-
-		// Cleanup
-		return () => {
-			window.removeEventListener('auth:login-complete', handleLoginComplete);
-			window.removeEventListener('auth:state-updated', handleAuthStateUpdated);
-		};
-	}, []);
-
-	// Notificar o componente pai quando estiver pronto
-	useEffect(() => {
-		if (verificationComplete && categoriesReady) {
-			console.log(
-				'[Store:TokenVerifier] Verificação e carregamento concluídos, notificando'
-			);
-			onReady();
-		}
-	}, [verificationComplete, categoriesReady, onReady]);
-
-	return null; // Este componente não renderiza nada
+	return null;
 };
 
 // Componente de carregamento para exibir enquanto verifica autenticação e carrega dados
@@ -317,17 +131,10 @@ const ScrollToTopButton = () => {
 
 	useEffect(() => {
 		const toggleVisibility = () => {
-			// Mostrar o botão quando rolar além de 300px
-			if (window.scrollY > 300) {
-				setIsVisible(true);
-			} else {
-				setIsVisible(false);
-			}
+			setIsVisible(window.scrollY > 300);
 		};
 
 		window.addEventListener('scroll', toggleVisibility);
-
-		// Limpar o event listener
 		return () => window.removeEventListener('scroll', toggleVisibility);
 	}, []);
 
@@ -359,226 +166,646 @@ const ScrollToTopButton = () => {
 
 export default function StorePage() {
 	const searchParams = useSearchParams();
+	const pathname = usePathname();
 	const [products, setProducts] = useState<Product[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
+	const [isLoadingCategory, setIsLoadingCategory] = useState(false);
 	const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 	const [error, setError] = useState<string | null>(null);
 	const [page, setPage] = useState(1);
 	const [hasMore, setHasMore] = useState(false);
-	const [totalProducts, setTotalProducts] = useState(0);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	const { categories, isLoading: categoriesLoading } = useCategories();
-	const { getJwtToken, isAuthenticated, isLoading: authLoading } = useAuth();
+	const { categories } = useCategories();
+	const { isAuthenticated } = useAuth();
 	const router = useRouter();
 	const loaderRef = useRef<HTMLDivElement>(null);
-	const [dataLoadAttempts, setDataLoadAttempts] = useState(0);
-	const maxLoadAttempts = 3;
 	const [pageReady, setPageReady] = useState(false);
-	const [initialDataLoaded, setInitialDataLoaded] = useState(false);
-	const [isAuthorizationChecked, setIsAuthorizationChecked] = useState(false);
-	const [loaderKey, setLoaderKey] = useState(0);
+	const [warehouseName, setWarehouseName] = useState<string>('MKT-Creator');
+	const isGridView = viewMode === 'grid';
+	const [loadAttempts, setLoadAttempts] = useState(0);
+	const maxLoadAttempts = 3;
+	const observerRef = useRef<IntersectionObserver | null>(null);
+	const scrollPositionRef = useRef<number>(0);
 
 	const categoryId = searchParams.get('category');
 	const searchQuery = searchParams.get('search');
-	const sortBy = searchParams.get('sort') || 'featured';
-	const isGridView = viewMode === 'grid';
+	const sortOrder = searchParams.get('sort') || 'featured';
+
+	// Restaurar o estado da sessão anterior ao montar o componente
+	useEffect(() => {
+		// Evitar operações com sessionStorage durante renderização no servidor
+		if (typeof window === 'undefined') return;
+
+		// Flag para controlar se devemos restaurar os dados
+		const shouldRestore =
+			sessionStorage.getItem('should_restore_store_state') === 'true';
+
+		if (shouldRestore) {
+			// Restaurar produtos da sessão anterior
+			const savedProducts = sessionStorage.getItem('store_products');
+			const savedPage = sessionStorage.getItem('store_page');
+			const savedViewMode = sessionStorage.getItem('store_view_mode');
+			const savedScrollPosition = sessionStorage.getItem(
+				'store_scroll_position'
+			);
+
+			// Se temos produtos salvos, restaurar o estado
+			if (savedProducts) {
+				try {
+					const parsedProducts = JSON.parse(savedProducts);
+					console.log(
+						`[StorePage] Restaurando ${parsedProducts.length} produtos da sessão anterior`
+					);
+					setProducts(parsedProducts);
+
+					// Restaurar a página atual
+					if (savedPage) {
+						setPage(parseInt(savedPage, 10));
+					}
+
+					// Restaurar o modo de visualização
+					if (
+						savedViewMode &&
+						(savedViewMode === 'grid' || savedViewMode === 'list')
+					) {
+						setViewMode(savedViewMode as 'grid' | 'list');
+					}
+
+					// Indicar que temos mais produtos para carregar
+					setHasMore(true);
+
+					// Restauração de dados concluída, não precisa carregar no início
+					setIsLoading(false);
+				} catch (error) {
+					console.error(
+						'[StorePage] Erro ao restaurar produtos da sessão:',
+						error
+					);
+					// Em caso de erro, carregue normalmente
+				}
+			}
+
+			// Restaurar a posição de rolagem após um pequeno atraso
+			if (savedScrollPosition) {
+				const scrollY = parseInt(savedScrollPosition, 10);
+				scrollPositionRef.current = scrollY;
+
+				// Aguardar a página renderizar completamente antes de restaurar a posição
+				const timer = setTimeout(() => {
+					window.scrollTo({ top: scrollY });
+					console.log(
+						`[StorePage] Restaurada posição de rolagem: ${scrollY}px`
+					);
+				}, 500);
+
+				return () => clearTimeout(timer);
+			}
+		} else {
+			// Marcar que o próximo acesso deve restaurar o estado
+			sessionStorage.setItem('should_restore_store_state', 'true');
+		}
+	}, []); // Executar apenas uma vez na montagem
+
+	// Efeito separado para salvar o estado antes de desmontar
+	useEffect(() => {
+		// Evitar operações com sessionStorage durante renderização no servidor
+		if (typeof window === 'undefined') return;
+
+		// Função para salvar o estado
+		const saveState = () => {
+			// Não salvar se não temos produtos ainda
+			if (products.length === 0) return;
+
+			// Salvar a posição de rolagem atual
+			const scrollY = window.scrollY;
+			sessionStorage.setItem('store_scroll_position', scrollY.toString());
+
+			// Salvar os produtos atuais
+			sessionStorage.setItem('store_products', JSON.stringify(products));
+
+			// Salvar a página atual
+			sessionStorage.setItem('store_page', page.toString());
+
+			// Salvar o modo de visualização
+			sessionStorage.setItem('store_view_mode', viewMode);
+
+			console.log(
+				`[StorePage] Estado salvo: ${products.length} produtos, página ${page}, posição ${scrollY}px`
+			);
+		};
+
+		// Registrar evento de beforeunload
+		window.addEventListener('beforeunload', saveState);
+
+		// Limpar event listener ao desmontar
+		return () => {
+			window.removeEventListener('beforeunload', saveState);
+			saveState(); // Também salvar ao desmontar o componente
+		};
+	}, [products, page, viewMode]); // Dependências para saber quando salvar o estado
+
+	// Detectar a categoria do cliente a partir dos logs ou localStorage
+	useEffect(() => {
+		// Verificar se já temos um warehouse definido
+		const savedWarehouse = localStorage.getItem('warehouse_name');
+		if (savedWarehouse) {
+			setWarehouseName(savedWarehouse);
+			console.log(`[StorePage] Usando warehouse salvo: ${savedWarehouse}`);
+		} else {
+			// Tenta detectar a categoria do usuário a partir do registro de logs
+			const categoryExtract = localStorage.getItem('category_extract');
+			if (categoryExtract) {
+				// Identificar explicitamente cada tipo de categoria
+				if (
+					categoryExtract.includes('Top Master') ||
+					categoryExtract.includes('Clinica Top Master')
+				) {
+					// Cliente é Top Master
+					setWarehouseName('MKT-Top Master');
+					localStorage.setItem('warehouse_name', 'MKT-Top Master');
+					console.log(
+						'[StorePage] Cliente identificado como Top Master, usando warehouse MKT-Top Master'
+					);
+				} else if (
+					categoryExtract.includes('Creator') ||
+					categoryExtract.includes('Médico') ||
+					categoryExtract.includes('Nutricionista') ||
+					categoryExtract.includes('Influenciador') ||
+					categoryExtract.includes('Atleta')
+				) {
+					// Cliente é Creator
+					setWarehouseName('MKT-Creator');
+					localStorage.setItem('warehouse_name', 'MKT-Creator');
+					console.log(
+						'[StorePage] Cliente identificado como Creator, usando warehouse MKT-Creator'
+					);
+				} else {
+					// Categoria não identificada, usar Creator como padrão
+					setWarehouseName('MKT-Creator');
+					localStorage.setItem('warehouse_name', 'MKT-Creator');
+					console.log(
+						'[StorePage] Categoria não identificada, usando warehouse padrão MKT-Creator'
+					);
+				}
+			} else {
+				// Se não temos informação de categoria, verificar se temos informações do cliente
+				// e fazer uma chamada para obter as informações
+				checkCustomerCategory();
+			}
+		}
+	}, []);
+
+	// Função para verificar a categoria do cliente através de uma chamada à API
+	const checkCustomerCategory = async () => {
+		try {
+			// Verificar se temos um token válido
+			if (!tokenStore.hasValidToken()) {
+				console.log(
+					'[StorePage] Token inválido, não é possível verificar categoria do cliente'
+				);
+				return;
+			}
+
+			// Verificar se temos ID do cliente em algum local
+			const clerkIdFromStorage = localStorage.getItem('clerk_user_id');
+			if (!clerkIdFromStorage) {
+				console.log('[StorePage] ID do cliente não encontrado');
+				return;
+			}
+
+			console.log(
+				`[StorePage] Buscando informações do cliente: ${clerkIdFromStorage}`
+			);
+
+			// Obter o token para a chamada
+			const token = tokenStore.getToken();
+
+			// Fazer chamada à API para obter informações do cliente
+			const response = await fetch(
+				`/api/customers/clerk/${clerkIdFromStorage}`,
+				{
+					method: 'GET',
+					headers: {
+						'Content-Type': 'application/json',
+						Accept: 'application/json',
+						Authorization: `Bearer ${token}`,
+					},
+					credentials: 'include',
+				}
+			);
+
+			if (!response.ok) {
+				console.error(
+					`[StorePage] Erro ao buscar informações do cliente: ${response.status}`
+				);
+				return;
+			}
+
+			const customerData = await response.json();
+
+			// Verificar se temos informação de categoria
+			if (customerData && customerData.__category__) {
+				const categoryName = customerData.__category__.name;
+				console.log(`[StorePage] Categoria do cliente obtida: ${categoryName}`);
+
+				// Salvar a informação da categoria para futuras referências
+				localStorage.setItem(
+					'category_extract',
+					`Cliente identificado como ${categoryName}`
+				);
+
+				// Definir o warehouse com base na categoria
+				if (
+					categoryName.includes('Top Master') ||
+					categoryName === 'Clinica Top Master'
+				) {
+					setWarehouseName('MKT-Top Master');
+					localStorage.setItem('warehouse_name', 'MKT-Top Master');
+					console.log(
+						'[StorePage] Cliente é Top Master, definindo warehouse para MKT-Top Master'
+					);
+				} else if (
+					categoryName.includes('Creator') ||
+					categoryName.includes('Médico') ||
+					categoryName.includes('Nutricionista') ||
+					categoryName.includes('Influenciador') ||
+					categoryName.includes('Atleta')
+				) {
+					setWarehouseName('MKT-Creator');
+					localStorage.setItem('warehouse_name', 'MKT-Creator');
+					console.log(
+						'[StorePage] Cliente é Creator, definindo warehouse para MKT-Creator'
+					);
+				} else {
+					// Categoria não identificada, usar Creator como padrão
+					setWarehouseName('MKT-Creator');
+					localStorage.setItem('warehouse_name', 'MKT-Creator');
+					console.log(
+						'[StorePage] Categoria não identificada, usando warehouse padrão MKT-Creator'
+					);
+				}
+
+				// Recarregar os produtos com o warehouse correto
+				loadProducts(1, false);
+			} else {
+				console.log(
+					'[StorePage] Cliente sem categoria definida, usando warehouse padrão'
+				);
+				setWarehouseName('MKT-Creator');
+				localStorage.setItem('warehouse_name', 'MKT-Creator');
+			}
+		} catch (error) {
+			console.error(
+				'[StorePage] Erro ao verificar categoria do cliente:',
+				error
+			);
+			// Em caso de erro, usar Creator como padrão
+			setWarehouseName('MKT-Creator');
+			localStorage.setItem('warehouse_name', 'MKT-Creator');
+		}
+	};
 
 	const setIsGridView = (isGrid: boolean) =>
 		setViewMode(isGrid ? 'grid' : 'list');
 
 	// Função para marcar a página como pronta após verificação do token
 	const handleVerificationReady = useCallback(() => {
-		console.log(
-			'[StorePage] TokenVerifier concluiu a verificação, carregando dados'
-		);
 		setPageReady(true);
 	}, []);
 
-	const loadProducts = async (currentPage: number, append: boolean = false) => {
-		if (append) {
-			setIsLoadingMore(true);
-		} else {
-			setIsLoading(true);
-			setError(null);
-		}
-
+	const loadProducts = async (
+		currentPage: number,
+		append: boolean = false,
+		extraParams: Record<string, any> = {}
+	) => {
 		try {
-			// Verificar autenticação de forma mais robusta, incluindo TokenStore
-			const tokenExists = tokenStore.hasValidToken();
-			const isUserAuthenticated = isAuthenticated || tokenExists;
-
-			// Verificar se o usuário está autenticado ou tem token válido
-			if (!isUserAuthenticated && isAuthorizationChecked) {
-				console.log('[StorePage] Usuário não autenticado e sem token válido');
-				setError(
-					'Usuário não autenticado. Faça login para visualizar os produtos.'
-				);
-				setIsLoading(false);
-				setIsLoadingMore(false);
-				return;
+			setError(null);
+			setIsLoadingMore(append);
+			// Só mostrar loading geral se não for carregamento de página adicional
+			if (!append) {
+				setIsLoading(true);
 			}
 
-			// Tentar obter token diretamente do TokenStore primeiro
-			let token = tokenStore.getToken();
-			if (!token) {
-				// Se não há token no TokenStore, tentar obter via getJwtToken
-				console.log(
-					'[StorePage] Token não encontrado no TokenStore, tentando getJwtToken'
-				);
-				token = await getJwtToken();
-			} else {
-				console.log(
-					'[StorePage] Usando token do TokenStore para carregar produtos'
-				);
+			// Obter parâmetros de pesquisa e filtros
+			const search = searchQuery || '';
+			const category = categoryId || '';
+
+			console.log(
+				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}, busca: "${search}"${
+					append ? ' (anexando resultados)' : ''
+				}`
+			);
+
+			// Usar warehouse específico com base nas configurações
+			let response;
+			try {
+				// Usar a nova função searchWarehouseProducts para busca específica em warehouse
+				response = await searchWarehouseProducts({
+					warehouseName: warehouseName,
+					page: currentPage - 1, // API usa base 0 para páginas
+					limit: PRODUCTS_PER_PAGE,
+					inStock: true,
+					active: true,
+					term: search, // Usar o termo de busca como parâmetro term
+					...extraParams, // Adicionar parâmetros extras
+				});
+			} catch (apiError) {
+				console.error('[Store] Erro ao buscar produtos:', apiError);
+
+				// Tentar novamente com a API genérica como fallback
+				console.log('[Store] Tentando API alternativa após falha');
+				response = await searchProducts({
+					searchQuery: search,
+					categoryId: category,
+					page: currentPage - 1,
+					limit: PRODUCTS_PER_PAGE,
+					sortBy: sortOrder,
+				});
 			}
 
-			if (!token && isAuthorizationChecked) {
-				setError(
-					'Não foi possível obter o token de autenticação. Tente fazer login novamente.'
-				);
-				setIsLoading(false);
-				setIsLoadingMore(false);
-
-				// Se ainda não excedemos o número máximo de tentativas, tentar novamente após um atraso
-				if (dataLoadAttempts < maxLoadAttempts) {
-					console.log(
-						`[StorePage] Tentativa ${
-							dataLoadAttempts + 1
-						} de ${maxLoadAttempts} para carregar produtos`
-					);
-					setDataLoadAttempts((prev) => prev + 1);
-					setTimeout(() => {
-						loadProducts(currentPage, append);
-					}, 1000);
-				}
-
-				return;
+			// Verificar se temos a estrutura de dados esperada
+			if (!response || !response.data || !Array.isArray(response.data)) {
+				console.error('[Store] Resposta da API inválida:', response);
+				throw new Error('Formato de resposta inválido da API');
 			}
 
 			console.log(
-				`[StorePage] Iniciando busca de produtos - página ${currentPage}...`
+				`[Store] ${response.data.length} produtos obtidos com sucesso`
 			);
 
-			// Encontrar a categoria atual e seus dados
-			let categoryName = searchParams.get('categoryName');
-			let categoryItemCount: number | undefined = undefined;
+			// Processar resultados e atualizar estado
+			const productsData = response.data.map((item: any) => ({
+				id: item.sku || item.tinyId || item.id,
+				name: item.name,
+				description: item.description || '',
+				price: item.price || 0,
+				originalPrice: item.originalPrice || item.price || 0,
+				imageUrl:
+					Array.isArray(item.images) && item.images.length > 0
+						? item.images[0]
+						: item.imageUrl || '/placeholder-product.png',
+				categoryId: item.categoryId || '',
+				category: item.category || undefined,
+				codigo: item.sku || '',
+				unidade: item.unit || 'UN',
+				active: item.active || true,
+			}));
 
-			if (categoryId && categoryId !== 'all') {
-				const selectedCategory = categories.find(
-					(cat) => cat.id === categoryId
+			// Filtrar produtos pela categoria selecionada (se houver)
+			let filteredProducts = productsData;
+			if (category && category !== 'all') {
+				console.log(
+					`[Store] Filtrando ${productsData.length} produtos pelo categoryId: ${category}`
 				);
 
-				if (selectedCategory) {
-					// Usar o nome da categoria da URL se disponível, caso contrário usar da lista de categorias
-					if (!categoryName) {
-						categoryName = selectedCategory.name;
+				// Verificar produtos que correspondem à categoria selecionada
+				filteredProducts = productsData.filter((product: Product) => {
+					// Verificar no categoryId do produto
+					if (product.categoryId === category) {
+						return true;
 					}
 
-					// Obter o número de itens na categoria para ajustar o limite
-					if (selectedCategory.itemQuantity) {
-						categoryItemCount = Number(selectedCategory.itemQuantity);
-						console.log(
-							`[StorePage] Categoria ${categoryName} tem ${categoryItemCount} itens`
-						);
+					// Verificar no objeto category aninhado (se existir)
+					if (product.category && product.category.id === category) {
+						return true;
 					}
 
+					// Caso especial: categoria Proteínas tem dois IDs possíveis
+					if (
+						category === '8bb26b67-a7ce-4001-ae51-ceec0082fb89' &&
+						(product.categoryId === '8fade785-4ad2-4f53-b715-c4a662dd6be6' ||
+							(product.category &&
+								product.category.id === '8fade785-4ad2-4f53-b715-c4a662dd6be6'))
+					) {
+						return true;
+					}
+
+					return false;
+				});
+
+				console.log(
+					`[Store] Filtrados ${filteredProducts.length} produtos da categoria ${category}`
+				);
+
+				// Se estamos na primeira página e temos poucos produtos após filtragem,
+				// carregar mais páginas para tentar encontrar mais produtos da categoria
+				if (
+					!append &&
+					filteredProducts.length < 4 &&
+					productsData.length === PRODUCTS_PER_PAGE
+				) {
 					console.log(
-						`[StorePage] Buscando produtos da categoria: ${categoryName} (ID: ${categoryId})`
+						'[Store] Poucos produtos da categoria encontrados, carregando mais...'
 					);
+					setIsLoadingCategory(true);
+
+					// Carregar mais páginas de forma assíncrona
+					const loadMoreForCategory = async () => {
+						let allProducts = [...productsData];
+						let currentPage = 2; // Começar na página 2 (já carregamos a 1)
+						let hasMorePages = true;
+						const maxPages = 10; // Limite para evitar loops infinitos
+
+						while (hasMorePages && currentPage <= maxPages) {
+							try {
+								// Carregar a próxima página
+								console.log(
+									`[Store] Carregando página ${currentPage} para buscar mais produtos da categoria`
+								);
+
+								const nextPageResponse = await searchWarehouseProducts({
+									warehouseName: warehouseName,
+									page: currentPage - 1, // API usa base 0
+									limit: PRODUCTS_PER_PAGE,
+									inStock: true,
+									active: true,
+									term: search,
+								});
+
+								// Verificar se temos resultados
+								if (
+									nextPageResponse &&
+									nextPageResponse.data &&
+									Array.isArray(nextPageResponse.data)
+								) {
+									// Processar os produtos
+									const nextPageProducts = nextPageResponse.data.map(
+										(item: any) => ({
+											id: item.sku || item.tinyId || item.id,
+											name: item.name,
+											description: item.description || '',
+											price: item.price || 0,
+											originalPrice: item.originalPrice || item.price || 0,
+											imageUrl:
+												Array.isArray(item.images) && item.images.length > 0
+													? item.images[0]
+													: item.imageUrl || '/placeholder-product.png',
+											categoryId: item.categoryId || '',
+											category: item.category || undefined,
+											codigo: item.sku || '',
+											unidade: item.unit || 'UN',
+											active: item.active || true,
+										})
+									);
+
+									// Adicionar à lista total
+									allProducts = [...allProducts, ...nextPageProducts];
+
+									// Verificar se temos mais páginas
+									hasMorePages = nextPageProducts.length === PRODUCTS_PER_PAGE;
+
+									// Filtrar novamente com todos os produtos acumulados
+									const newFilteredProducts = allProducts.filter(
+										(product: Product) => {
+											if (product.categoryId === category) return true;
+											if (product.category && product.category.id === category)
+												return true;
+											if (
+												category === '8bb26b67-a7ce-4001-ae51-ceec0082fb89' &&
+												(product.categoryId ===
+													'8fade785-4ad2-4f53-b715-c4a662dd6be6' ||
+													(product.category &&
+														product.category.id ===
+															'8fade785-4ad2-4f53-b715-c4a662dd6be6'))
+											) {
+												return true;
+											}
+											return false;
+										}
+									);
+
+									// Se já temos produtos suficientes, parar a busca
+									if (newFilteredProducts.length >= 8) {
+										console.log(
+											`[Store] Encontrados ${newFilteredProducts.length} produtos da categoria após busca adicional`
+										);
+										setProducts(newFilteredProducts);
+										setIsLoadingCategory(false);
+										break;
+									}
+
+									// Se não encontramos produtos suficientes, continuar buscando
+									currentPage++;
+								} else {
+									// Não há mais páginas
+									hasMorePages = false;
+								}
+							} catch (error) {
+								console.error(
+									`[Store] Erro ao carregar página adicional ${currentPage}:`,
+									error
+								);
+								hasMorePages = false;
+							}
+						}
+
+						// Após todas as tentativas, atualizar a lista com o que encontramos
+						const finalFilteredProducts = allProducts.filter(
+							(product: Product) => {
+								if (product.categoryId === category) return true;
+								if (product.category && product.category.id === category)
+									return true;
+								if (
+									category === '8bb26b67-a7ce-4001-ae51-ceec0082fb89' &&
+									(product.categoryId ===
+										'8fade785-4ad2-4f53-b715-c4a662dd6be6' ||
+										(product.category &&
+											product.category.id ===
+												'8fade785-4ad2-4f53-b715-c4a662dd6be6'))
+								) {
+									return true;
+								}
+								return false;
+							}
+						);
+
+						console.log(
+							`[Store] Finalizada busca adicional, encontrados ${finalFilteredProducts.length} produtos da categoria`
+						);
+						setProducts(finalFilteredProducts);
+						setIsLoading(false);
+						setIsLoadingCategory(false);
+					};
+
+					// Iniciar o carregamento adicional, permitindo que a UI atualize com os resultados iniciais
+					loadMoreForCategory();
 				}
 			}
 
-			// Usar a nova função de busca avançada com o número de itens da categoria
-			// @ts-ignore - Ignorando problemas de tipagem na conversão de null para undefined
-			const productsData = await searchProducts({
-				query: searchQuery ? searchQuery : undefined,
-				categoryId,
-				categoryName,
-				categoryItemCount,
-				sortBy,
-				jwtToken: token || undefined,
-				page: currentPage,
-				limit: PRODUCTS_PER_PAGE,
-				searchQuery: searchQuery ? searchQuery : undefined,
+			// Se estamos anexando a uma lista existente, mesclar resultados
+			// Caso contrário, substituir a lista atual
+			setProducts((prev) => {
+				if (append) {
+					// Verificar por duplicatas antes de anexar
+					const existingIds = new Set(
+						prev.map((product: Product) => product.id)
+					);
+					const newProducts = filteredProducts.filter(
+						(product: Product) => !existingIds.has(product.id)
+					);
+
+					if (newProducts.length === 0) {
+						console.log('[Store] Nenhum produto novo para adicionar');
+						// Mesmo que não tenha produtos novos, manter página correta para próxima tentativa
+						return prev;
+					}
+
+					console.log(
+						`[Store] Adicionando ${newProducts.length} novos produtos aos ${prev.length} existentes`
+					);
+					return [...prev, ...newProducts];
+				} else {
+					console.log(
+						`[Store] Substituindo produtos existentes por ${filteredProducts.length} novos produtos`
+					);
+					return filteredProducts;
+				}
 			});
 
-			if (append) {
-				// Adicionar os novos produtos à lista existente, evitando duplicatas
-				setProducts((prev) => {
-					// Criar um Set com os IDs dos produtos existentes
-					const existingIds = new Set(prev.map((product) => product.id));
-
-					// Filtrar os novos produtos para incluir apenas os que não existem ainda
-					const uniqueNewProducts = productsData.filter(
-						(product) => !existingIds.has(product.id)
-					);
-
-					console.log(
-						`[StorePage] Filtrando produtos duplicados: ${productsData.length} recebidos, ${uniqueNewProducts.length} únicos`
-					);
-
-					// Retornar a lista atualizada apenas com produtos únicos
-					return [...prev, ...uniqueNewProducts];
-				});
-			} else {
-				// Substituir completamente a lista de produtos
-				setProducts(productsData);
-			}
-
-			// Verificar se há mais produtos para carregar
-			if (productsData.length === MAX_API_PRODUCTS) {
-				// Quando retorna 100 produtos (o máximo), assumimos que pode haver mais
-				setHasMore(true);
-				console.log(
-					'[StorePage] Limite máximo de produtos atingido (100), habilitando carregamento de mais'
-				);
-			} else if (
-				categoryItemCount &&
-				(append ? totalProducts + productsData.length : productsData.length) <
-					categoryItemCount
-			) {
-				// Se sabemos o total da categoria e ainda não carregamos todos
-				setHasMore(true);
-				console.log(
-					`[StorePage] Carregados ${
-						append ? totalProducts + productsData.length : productsData.length
-					} de ${categoryItemCount} produtos`
-				);
-			} else {
-				// Se retornou menos produtos que o limite, assumimos que não há mais
-				setHasMore(productsData.length === PRODUCTS_PER_PAGE);
-				console.log(
-					`[StorePage] ${productsData.length} produtos carregados, ${
-						hasMore ? 'há' : 'não há'
-					} mais para carregar`
-				);
-			}
-
-			setTotalProducts((prev) =>
-				append ? prev + productsData.length : productsData.length
-			);
-
+			// Definir a flag hasMore com base no número de produtos recebidos
+			const receivedCount = filteredProducts.length;
+			// Se recebemos menos produtos que o esperado, provavelmente não há mais páginas
+			setHasMore(receivedCount >= PRODUCTS_PER_PAGE);
 			console.log(
-				`[StorePage] ${productsData.length} produtos carregados com sucesso`
+				`[Store] ${
+					receivedCount >= PRODUCTS_PER_PAGE ? 'Há' : 'Não há'
+				} mais produtos para carregar`
 			);
 
-			// Marcar dados iniciais como carregados
-			if (!append && !initialDataLoaded) {
-				setInitialDataLoaded(true);
+			// Atualizar o número da página apenas se o append for bem-sucedido
+			if (!append || filteredProducts.length > 0) {
+				setPage(currentPage);
 			}
+
+			// Limpar estado de carregamento
+			setIsLoading(false);
+			setIsLoadingMore(false);
+			setLoadAttempts(0);
+
+			// Remover o código que salvava no sessionStorage a cada carregamento
+			// Isso será feito apenas no efeito de desmontagem
 		} catch (error) {
-			console.error('[StorePage] Falha ao carregar produtos:', error);
+			console.error('[Store] Erro ao carregar produtos:', error);
+			setIsLoading(false);
+			setIsLoadingMore(false);
 			setError(
-				'Não foi possível carregar os produtos. Por favor, tente novamente mais tarde.'
+				error instanceof Error
+					? error.message
+					: 'Ocorreu um erro ao carregar os produtos'
 			);
-			if (!append) {
-				setProducts([]);
-			}
-		} finally {
-			if (append) {
-				setIsLoadingMore(false);
-			} else {
-				setIsLoading(false);
+
+			// Gerenciar tentativas de carregamento
+			const nextAttempt = loadAttempts + 1;
+			setLoadAttempts(nextAttempt);
+
+			// Se estamos abaixo do limite de tentativas, tentar novamente após um atraso
+			if (nextAttempt <= maxLoadAttempts) {
+				console.log(
+					`[Store] Tentativa ${nextAttempt}/${maxLoadAttempts} de carregar produtos`
+				);
+				setTimeout(() => {
+					loadProducts(currentPage, append);
+				}, 2000); // Esperar 2 segundos antes de tentar novamente
 			}
 		}
 	};
@@ -587,262 +814,133 @@ export default function StorePage() {
 	const loadMoreProducts = useCallback(() => {
 		if (!isLoadingMore && hasMore) {
 			const nextPage = page + 1;
-			setPage(nextPage);
-			loadProducts(nextPage, true);
+			console.log(`[StorePage] Carregando mais produtos (página ${nextPage})`);
+			setIsLoadingMore(true);
+
+			// Modificando para usar um parâmetro de requisição único a cada vez para evitar cache
+			setTimeout(() => {
+				loadProducts(nextPage, true, { _t: Date.now() });
+			}, 500);
 		}
-	}, [isLoadingMore, hasMore, page]);
-
-	// Função para verificar o token quando a página volta a ficar visível
-	const checkTokenOnVisibilityChange = useCallback(() => {
-		if (document.visibilityState === 'visible') {
-			// Se tivermos mais produtos para carregar e a página estiver pronta
-			if (hasMore && pageReady && !isLoadingMore) {
-				console.log(
-					'[StorePage] Página visível novamente, verificando continuidade do carregamento'
-				);
-
-				// Verificar se o elemento de carregamento está visível
-				if (loaderRef.current) {
-					const rect = loaderRef.current.getBoundingClientRect();
-					const isVisible =
-						rect.top >= 0 &&
-						rect.left >= 0 &&
-						rect.bottom <=
-							(window.innerHeight || document.documentElement.clientHeight) &&
-						rect.right <=
-							(window.innerWidth || document.documentElement.clientWidth);
-
-					// Se o elemento estiver visível, forçar carregamento de mais produtos
-					if (isVisible) {
-						console.log(
-							'[StorePage] Elemento de carregamento visível, retomando carregamento'
-						);
-						setTimeout(() => loadMoreProducts(), 500);
-					}
-				}
-			}
-		}
-	}, [hasMore, pageReady, isLoadingMore, loadMoreProducts]);
-
-	// Adicionar listener para mudanças de visibilidade para verificar token
-	useEffect(() => {
-		document.addEventListener('visibilitychange', checkTokenOnVisibilityChange);
-		return () => {
-			document.removeEventListener(
-				'visibilitychange',
-				checkTokenOnVisibilityChange
-			);
-		};
-	}, [checkTokenOnVisibilityChange]);
+	}, [isLoadingMore, hasMore, page, loadProducts]);
 
 	// Configurar o observador de interseção para o carregamento infinito
 	useEffect(() => {
-		// Esta função configura o observador
-		const setupObserver = () => {
-			// Se não temos elementos para observar ou não temos mais produtos, não fazer nada
-			if (!loaderRef.current || !hasMore) {
-				console.log(
-					'[StorePage] Não foi possível configurar o observador: elemento não encontrado ou não há mais produtos'
-				);
-				return () => {}; // Função vazia de limpeza
-			}
-
-			console.log(
-				'[StorePage] Configurando observador de interseção para carregamento infinito'
-			);
-
-			// Criando observador com configuração simples e robusta
-			const observer = new IntersectionObserver(
-				(entries) => {
-					// Verificar se o elemento está visível e temos mais itens para carregar
-					if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
-						console.log(
-							'[StorePage] Elemento de carregamento visível, carregando mais produtos...'
-						);
-						// Carregar próxima página de produtos
-						loadMoreProducts();
-					}
-				},
-				{
-					rootMargin: '300px', // Margem maior para detectar com antecedência
-					threshold: 0.1, // Baixo limiar de interseção
-				}
-			);
-
-			// Observar o elemento de carregamento
-			observer.observe(loaderRef.current);
-
-			console.log('[StorePage] Observador configurado com sucesso');
-
-			// Retornar função para limpar o observador
-			return () => {
-				console.log('[StorePage] Desconectando observador');
-				observer.disconnect();
-			};
-		};
-
-		// Configurar o observador inicialmente
-		let cleanup = setupObserver();
-
-		// Função para tratar mudanças de visibilidade
-		const handleVisibilityChange = () => {
-			// Quando a página ficar visível
-			if (document.visibilityState === 'visible') {
-				console.log(
-					'[StorePage] Página visível novamente, reconfigurando carregamento infinito'
-				);
-
-				// Limpar observador anterior
-				if (cleanup) cleanup();
-
-				// Adicionar um pequeno atraso para garantir que a DOM esteja atualizada
-				setTimeout(() => {
-					// Verificar se o elemento ainda existe
-					if (!loaderRef.current && hasMore) {
-						console.log(
-							'[StorePage] Elemento de carregamento não encontrado, forçando atualização'
-						);
-						// Forçar re-renderização para atualizar a referência
-						setLoaderKey((prev) => prev + 1);
-
-						// Aguardar a re-renderização antes de configurar o observador
-						setTimeout(() => {
-							cleanup = setupObserver();
-
-							// Verificar se o elemento está visível após reconfiguração
-							if (loaderRef.current) {
-								const rect = loaderRef.current.getBoundingClientRect();
-								const isVisible =
-									rect.top >= 0 &&
-									rect.left >= 0 &&
-									rect.bottom <=
-										(window.innerHeight ||
-											document.documentElement.clientHeight) &&
-									rect.right <=
-										(window.innerWidth || document.documentElement.clientWidth);
-
-								// Se o elemento estiver visível, forçar carregamento
-								if (isVisible && hasMore && !isLoadingMore) {
-									console.log(
-										'[StorePage] Elemento visível após reconfiguração, carregando mais produtos'
-									);
-									loadMoreProducts();
-								}
-							}
-						}, 100);
-					} else {
-						// Configurar observador normalmente
-						cleanup = setupObserver();
-
-						// Verificar se o elemento está visível após reconfiguração
-						if (loaderRef.current) {
-							const rect = loaderRef.current.getBoundingClientRect();
-							const isVisible =
-								rect.top >= 0 &&
-								rect.left >= 0 &&
-								rect.bottom <=
-									(window.innerHeight ||
-										document.documentElement.clientHeight) &&
-								rect.right <=
-									(window.innerWidth || document.documentElement.clientWidth);
-
-							// Se o elemento estiver visível, forçar carregamento
-							if (isVisible && hasMore && !isLoadingMore) {
-								console.log(
-									'[StorePage] Elemento visível após reconfiguração, carregando mais produtos'
-								);
-								loadMoreProducts();
-							}
-						}
-					}
-				}, 300);
-			}
-		};
-
-		// Adicionar listener para mudanças de visibilidade
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
-		// Limpeza ao desmontar
-		return () => {
-			if (cleanup) cleanup();
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-		};
-	}, [hasMore, isLoadingMore, loadMoreProducts, loaderKey]);
-
-	// Carregar produtos quando a página estiver pronta para processamento
-	useEffect(() => {
-		if (pageReady && !initialDataLoaded) {
-			setPage(1);
-			loadProducts(1, false);
+		// Desconectar o observador anterior, se existir
+		if (observerRef.current) {
+			observerRef.current.disconnect();
 		}
-	}, [
-		pageReady,
-		categoryId,
-		sortBy,
-		searchQuery,
-		getJwtToken,
-		isAuthenticated,
-		initialDataLoaded,
-	]);
+
+		// Se não temos mais para carregar ou já estamos carregando, não configure o observador
+		if (!hasMore || isLoadingMore || !loaderRef.current || !pageReady) return;
+
+		// Criar um novo observador com margem maior para carregar antes do usuário chegar ao fim
+		observerRef.current = new IntersectionObserver(
+			(entries) => {
+				// Se o elemento loader estiver visível e temos mais para carregar
+				if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
+					console.log(
+						'[StorePage] Área de carregamento visível, carregando mais produtos...'
+					);
+					loadMoreProducts();
+				}
+			},
+			{
+				root: null, // viewport
+				rootMargin: '500px', // Aumentar a margem para carregar mais cedo, antes do usuário chegar no final
+				threshold: 0.1, // 10% do elemento visível é suficiente para disparar
+			}
+		);
+
+		// Observar o elemento loader
+		if (loaderRef.current) {
+			observerRef.current.observe(loaderRef.current);
+		}
+
+		// Limpar o observador ao desmontar
+		return () => {
+			if (observerRef.current) {
+				observerRef.current.disconnect();
+			}
+		};
+	}, [hasMore, isLoadingMore, loadMoreProducts, pageReady]);
+
+	// Carregar produtos quando a página estiver pronta
+	useEffect(() => {
+		if (!pageReady) return;
+
+		// Verificar se já temos token antes de tentar carregar
+		const hasToken = tokenStore.hasValidToken();
+
+		if (hasToken) {
+			console.log('[StorePage] Token encontrado, carregando produtos...');
+			loadProducts(1, false);
+		} else if (loadAttempts < maxLoadAttempts) {
+			// Se não temos token e ainda não tentamos muitas vezes, aguardar e tentar novamente
+			console.log(
+				`[StorePage] Token não encontrado, tentativa ${
+					loadAttempts + 1
+				}/${maxLoadAttempts} em 1s...`
+			);
+			const timer = setTimeout(() => {
+				setLoadAttempts((prev) => prev + 1);
+				loadProducts(1, false);
+			}, 1000);
+
+			return () => clearTimeout(timer);
+		} else {
+			console.log(
+				'[StorePage] Número máximo de tentativas atingido, exibindo erro'
+			);
+			setError(
+				'Erro de autenticação: Token não encontrado após múltiplas tentativas'
+			);
+			setIsLoading(false);
+		}
+	}, [pageReady, searchQuery, sortOrder, categoryId, loadAttempts]);
 
 	// Redirecionamento para login se não estiver autenticado
 	useEffect(() => {
-		const checkAuth = async () => {
-			if (typeof window === 'undefined' || pageReady) return;
-
-			// Verificar primeira se temos um token válido no TokenStore
-			if (tokenStore.hasValidToken()) {
-				console.log('[Store] Token válido encontrado no TokenStore');
-				// Se temos um token válido, considerar como autenticado
-				setIsAuthorizationChecked(true);
-				return;
-			}
-
-			// Como alternativa, verificar o token da API (compatibilidade)
-			const apiToken = await authService.getApiToken();
-			console.log(
-				'[Store] Token válido encontrado no authService:',
-				!!apiToken
-			);
-
-			// Aguardar um tempo para garantir que o contexto de autenticação seja atualizado
-			await new Promise((resolve) => setTimeout(resolve, 500));
-
-			// Marcar que a verificação de autorização foi concluída
-			setIsAuthorizationChecked(true);
-
-			// Se não há token em nenhum lugar e não estamos carregando, redirecionar para login
-			if (!apiToken && !tokenStore.hasValidToken() && !authLoading) {
-				console.log(
-					'[StorePage] Usuário não autenticado e sem token, redirecionando para login'
-				);
-				router.push('/login');
-			}
-		};
-
-		// Verificar autenticação ao montar, mas apenas se o componente estiver montado no cliente
-		if (typeof window !== 'undefined') {
-			checkAuth();
+		if (!isAuthenticated && !tokenStore.hasValidToken() && !isLoading) {
+			router.push('/login');
 		}
-	}, [router, authLoading, pageReady]);
+	}, [router, isAuthenticated, isLoading]);
 
-	// Determinar se deve mostrar a tela de carregamento
-	const showLoadingScreen =
-		!pageReady || authLoading || (!isAuthenticated && !isAuthorizationChecked);
+	// Efeito para recarregar os produtos quando o warehouse mudar
+	useEffect(() => {
+		// Verificar se a página está pronta e se temos um warehouse definido
+		if (pageReady && warehouseName) {
+			console.log(
+				`[StorePage] Warehouse alterado para: ${warehouseName}, recarregando produtos...`
+			);
+			loadProducts(1, false);
+		}
+	}, [warehouseName, pageReady]);
 
 	return (
-		<StoreLayout hideSidebar={showLoadingScreen}>
+		<StoreLayout hideSidebar={!pageReady}>
 			{/* Componente para verificar token */}
 			<TokenVerifier onReady={handleVerificationReady} />
+
 			{/* Botão de voltar ao topo */}
 			<ScrollToTopButton />
 
-			{showLoadingScreen ? (
+			{!pageReady ? (
 				<LoadingScreen />
 			) : (
-				<div className="max-w-6xl mx-auto py-8 space-y-6">
+				<motion.div
+					className="max-w-6xl mx-auto py-8 space-y-6"
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					transition={{ duration: 0.5 }}
+				>
 					{/* Cabeçalho da loja */}
-					<div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+					<motion.div
+						className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6"
+						initial={{ y: -20, opacity: 0 }}
+						animate={{ y: 0, opacity: 1 }}
+						transition={{ duration: 0.5 }}
+					>
 						<div className="flex items-center gap-3 mb-2">
 							<div className="h-10 w-10 rounded-full bg-brand-magenta/10 flex items-center justify-center">
 								<svg
@@ -869,7 +967,7 @@ export default function StorePage() {
 								</p>
 							</div>
 						</div>
-					</div>
+					</motion.div>
 
 					{/* Search and filter area */}
 					<div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -951,18 +1049,50 @@ export default function StorePage() {
 								Erro ao carregar produtos
 							</h2>
 							<p className="mt-2 text-gray-500 max-w-md mx-auto">{error}</p>
-							<button
-								onClick={() => loadProducts(1, false)}
-								className="mt-6 px-4 py-2 bg-brand-magenta text-white rounded-md hover:bg-brand-magenta/90 transition-colors"
-							>
-								Tentar novamente
-							</button>
+							<div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+								<button
+									onClick={() => loadProducts(1, false)}
+									className="px-4 py-2 bg-brand-magenta text-white rounded-md hover:bg-brand-magenta/90 transition-colors"
+								>
+									Tentar novamente
+								</button>
+								<button
+									onClick={() => {
+										window.location.reload();
+									}}
+									className="px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 transition-colors"
+								>
+									Recarregar página
+								</button>
+							</div>
 						</div>
 					) : (
 						<>
 							{products.length > 0 ? (
 								<div className="space-y-6">
-									{/* Grid de produtos */}
+									{/* Indicador de carregamento da categoria */}
+									{isLoadingCategory && (
+										<div className="mb-4 py-3 px-4 bg-blue-50 border border-blue-100 text-blue-700 rounded-md flex items-center gap-2">
+											<div className="animate-spin">
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="18"
+													height="18"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="2"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+												>
+													<path d="M21 12a9 9 0 1 1-6.219-8.56" />
+												</svg>
+											</div>
+											<span>Buscando mais produtos desta categoria...</span>
+										</div>
+									)}
+
+									{/* Grid de produtos com animação */}
 									<div
 										className={`grid ${
 											isGridView
@@ -970,53 +1100,72 @@ export default function StorePage() {
 												: 'grid-cols-1'
 										} gap-6`}
 									>
-										{products.map((product) => (
-											<ProductCard
-												key={product.id}
-												product={product}
-												categories={categories}
-												viewMode={viewMode}
-											/>
-										))}
+										<AnimatePresence mode="popLayout">
+											{products.map((product, index) => (
+												<motion.div
+													key={product.id}
+													initial={{ opacity: 0, y: 20 }}
+													animate={{ opacity: 1, y: 0 }}
+													transition={{
+														duration: 0.3,
+														delay: Math.min(0.05 * (index % 12), 0.3), // Escalonar a animação, mas limitar o delay máximo
+													}}
+												>
+													<ProductCard
+														product={product}
+														categories={categories}
+														viewMode={viewMode}
+													/>
+												</motion.div>
+											))}
+										</AnimatePresence>
 									</div>
 
 									{/* Indicador de carregamento infinito */}
-									{hasMore && (
-										<div
-											ref={loaderRef}
-											key={`loader-${loaderKey}`}
-											className="flex justify-center py-8"
-										>
-											{isLoadingMore && (
-												<div className="flex items-center gap-2 text-gray-500">
-													<span className="animate-spin">
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															width="20"
-															height="20"
-															viewBox="0 0 24 24"
-															fill="none"
-															stroke="currentColor"
-															strokeWidth="2"
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															className="rotate-0"
-														>
-															<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-														</svg>
-													</span>
-													<span>Carregando mais produtos...</span>
-												</div>
-											)}
-										</div>
-									)}
+									<div
+										ref={loaderRef}
+										className="flex justify-center h-20 mt-4"
+										data-testid="infinite-loader"
+									>
+										{isLoadingMore && (
+											<motion.div
+												className="flex items-center gap-2 text-gray-500"
+												initial={{ opacity: 0, y: 10 }}
+												animate={{ opacity: 1, y: 0 }}
+												transition={{ duration: 0.3 }}
+											>
+												<span className="animate-spin">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="20"
+														height="20"
+														viewBox="0 0 24 24"
+														fill="none"
+														stroke="currentColor"
+														strokeWidth="2"
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														className="rotate-0"
+													>
+														<path d="M21 12a9 9 0 1 1-6.219-8.56" />
+													</svg>
+												</span>
+												<span>Carregando mais produtos...</span>
+											</motion.div>
+										)}
+									</div>
 
 									{/* Contador de produtos */}
-									<div className="flex justify-center">
+									<motion.div
+										className="flex justify-center"
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										transition={{ duration: 0.5, delay: 0.3 }}
+									>
 										<p className="text-gray-500 text-sm">
 											Exibindo {products.length} produtos
 										</p>
-									</div>
+									</motion.div>
 								</div>
 							) : (
 								<div className="text-center py-16 bg-white rounded-xl shadow-sm">
@@ -1027,13 +1176,30 @@ export default function StorePage() {
 										Nenhum produto encontrado
 									</h2>
 									<p className="mt-2 text-gray-500 max-w-md mx-auto">
-										Tente ajustar os filtros ou buscar por termos diferentes.
+										{categoryId && categoryId !== 'all' ? (
+											<>
+												Não encontramos produtos na categoria selecionada.{' '}
+												<button
+													className="text-brand-magenta hover:underline"
+													onClick={() => {
+														const params = new URLSearchParams(searchParams);
+														params.delete('category');
+														params.delete('categoryName');
+														router.push(`${pathname}?${params.toString()}`);
+													}}
+												>
+													Ver todos os produtos
+												</button>
+											</>
+										) : (
+											'Tente ajustar os filtros ou buscar por termos diferentes.'
+										)}
 									</p>
 								</div>
 							)}
 						</>
 					)}
-				</div>
+				</motion.div>
 			)}
 		</StoreLayout>
 	);

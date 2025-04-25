@@ -155,6 +155,34 @@ class TokenStore {
         this.token = storedToken;
         return storedToken;
       }
+      
+      // Se não encontrou no localStorage, verificar nos cookies
+      try {
+        console.log("[TokenStore] Token não encontrado no localStorage, verificando cookies");
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+          const [name, value] = cookie.trim().split('=');
+          if (name === TOKEN_KEY && value) {
+            console.log("[TokenStore] Token encontrado nos cookies");
+            // Verificar validade do token do cookie
+            if (this.isTokenFormatValid(value)) {
+              // Armazenar o token em memória para uso futuro
+              this.token = value;
+              // Sincronizar com localStorage para maior consistência
+              try {
+                localStorage.setItem(TOKEN_KEY, value);
+                console.log("[TokenStore] Token do cookie sincronizado com localStorage");
+              } catch (e) {
+                console.error("[TokenStore] Erro ao sincronizar token do cookie para localStorage:", e);
+              }
+              return value;
+            }
+          }
+        }
+        console.log("[TokenStore] Token não encontrado nos cookies");
+      } catch (e) {
+        console.error("[TokenStore] Erro ao verificar cookies:", e);
+      }
     }
 
     return null;

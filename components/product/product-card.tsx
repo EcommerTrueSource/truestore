@@ -29,6 +29,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useRouter } from 'next/navigation';
 
 interface ProductCardProps {
 	product: Product;
@@ -50,17 +51,50 @@ export function ProductCard({
 	const [isAddingToCart, setIsAddingToCart] = useState(false);
 	const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
 	const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
+	const router = useRouter();
 
 	const isProductFavorite = isFavorite(product.id);
 	const cartItem = cartItems.find((item) => item.id === product.id);
 	const itemInCart = cartItem ? cartItem.quantity : 0;
 	const isListView = viewMode === 'list';
 
-	// Encontrar o nome da categoria com base no categoryId do produto
-	const getCategoryName = () => {
+	// Encontrar a categoria com base no categoryId do produto
+	const getCategory = () => {
 		// Se o produto já tiver o objeto de categoria, use-o diretamente
 		if (product.category && product.category.name) {
-			return product.category.name;
+			return {
+				id: product.category.id || product.categoryId || '',
+				name: product.category.name,
+			};
+		}
+
+		// Caso contrário, tente encontrar pelo categoryId
+		if (product.categoryId) {
+			// Buscar a categoria usando o categoryId
+			const category = categories.find((cat) => cat.id === product.categoryId);
+
+			// Se encontrou, retornar o objeto
+			if (category) {
+				return {
+					id: category.id,
+					name: category.name,
+				};
+			}
+
+			// Tentar encontrar por correspondência parcial se for um UUID
+			if (product.categoryId.includes('-')) {
+				const strippedProductCategoryId = product.categoryId.replace(/-/g, '');
+				const matchedCategory = categories.find(
+					(cat) => cat.id.replace(/-/g, '') === strippedProductCategoryId
+				);
+
+				if (matchedCategory) {
+					return {
+						id: matchedCategory.id,
+						name: matchedCategory.name,
+					};
+				}
+			}
 		}
 
 		// Verificar se temos a descrição com informação da categoria
@@ -70,47 +104,40 @@ export function ProductCard({
 				/Categoria(?:\s+importada\s+do\s+Tiny)?:\s+([^,\.]+)/i
 			);
 			if (categoryMatch && categoryMatch[1]) {
-				const categoryFromDescription = categoryMatch[1].trim();
-				console.log(
-					`[ProductCard] Categoria extraída da descrição: "${categoryFromDescription}" para produto: ${product.name}`
+				const categoryName = categoryMatch[1].trim();
+
+				// Encontrar a categoria pelo nome
+				const categoryByName = categories.find(
+					(cat) => cat.name.toLowerCase() === categoryName.toLowerCase()
 				);
-				return categoryFromDescription;
+
+				if (categoryByName) {
+					return {
+						id: categoryByName.id,
+						name: categoryByName.name,
+					};
+				}
+
+				// Se não encontrou, retornar apenas o nome
+				return {
+					id: '',
+					name: categoryName,
+				};
 			}
 		}
 
-		// Caso contrário, tente encontrar pelo categoryId
-		if (!product.categoryId) return 'Geral';
-
-		// Buscar a categoria usando o categoryId
-		const category = categories.find((cat) => cat.id === product.categoryId);
-
-		// Se encontrou, retornar o nome
-		if (category) {
-			return category.name;
-		}
-
-		// Se categoryId for um UUID (formato diferente), tente encontrar por correspondência parcial
-		if (product.categoryId.includes('-')) {
-			console.log(
-				`[ProductCard] Tentando encontrar categoria por correspondência parcial para ID: ${product.categoryId}`
-			);
-			// Tentar encontrar por correspondência parcial (removeendo hífens para comparação)
-			const strippedProductCategoryId = product.categoryId.replace(/-/g, '');
-			const matchedCategory = categories.find(
-				(cat) => cat.id.replace(/-/g, '') === strippedProductCategoryId
-			);
-
-			if (matchedCategory) {
-				console.log(
-					`[ProductCard] Categoria encontrada por correspondência parcial: ${matchedCategory.name}`
-				);
-				return matchedCategory.name;
-			}
-		}
-
-		// Retornar "Geral" como fallback
-		return 'Geral';
+		// Retornar objeto padrão como fallback
+		return {
+			id: '',
+			name: 'Geral',
+		};
 	};
+
+	// Obter a categoria completa para o produto atual
+	const productCategory = getCategory();
+
+	// Função auxiliar para obter apenas o nome da categoria (compatibilidade com código existente)
+	const getCategoryName = () => productCategory.name;
 
 	const handleLike = (e: React.MouseEvent) => {
 		e.preventDefault();
@@ -282,7 +309,17 @@ export function ProductCard({
 					>
 						<Badge
 							variant="outline"
-							className="bg-white/80 backdrop-blur-sm text-xs font-medium text-gray-700 border-0"
+							className="bg-white/80 backdrop-blur-sm text-xs font-medium text-gray-700 border-0 cursor-pointer hover:bg-white/90"
+							onClick={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								if (productCategory.id) {
+									const params = new URLSearchParams();
+									params.set('category', productCategory.id);
+									params.set('categoryName', productCategory.name);
+									router.push(`/store?${params.toString()}`);
+								}
+							}}
 						>
 							{getCategoryName()}
 						</Badge>
@@ -332,7 +369,23 @@ export function ProductCard({
 										<span className="mx-1">•</span>
 									</>
 								)}
-								<span>{getCategoryName()}</span>
+								{productCategory.id ? (
+									<button
+										className="text-gray-500 hover:text-brand-magenta hover:underline transition-colors"
+										onClick={(e) => {
+											e.preventDefault();
+											e.stopPropagation();
+											const params = new URLSearchParams();
+											params.set('category', productCategory.id);
+											params.set('categoryName', productCategory.name);
+											router.push(`/store?${params.toString()}`);
+										}}
+									>
+										{getCategoryName()}
+									</button>
+								) : (
+									<span>{getCategoryName()}</span>
+								)}
 							</div>
 						</div>
 

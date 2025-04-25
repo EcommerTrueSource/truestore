@@ -2,10 +2,21 @@ import { NextRequest } from 'next/server';
 import { TrueCore } from '@/lib/true-core-proxy';
 
 /**
- * Rota para produtos de marketing
+ * Rota específica para busca de produtos por warehouse
  * 
- * Endpoint público: /api/marketing/products
- * Endpoint interno: /marketing/products
+ * Endpoint público: /api/marketing/products/warehouse/search
+ * Endpoint interno: /marketing/products/warehouse/search
+ * 
+ * Esta rota encaminha a requisição para o endpoint específico do True Core
+ * que permite buscar produtos de um warehouse específico.
+ * 
+ * Parâmetros de consulta:
+ * - inStock: boolean - Produtos em estoque (default: true)
+ * - active: boolean - Produtos ativos (default: true)
+ * - warehouseName: string - Nome do warehouse (default: MKT-Creator)
+ * - page: number - Página de resultados (default: 0)
+ * - limit: number - Limite de resultados por página (default: 12)
+ * - term: string - Termo para busca de produtos (opcional)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -32,12 +43,48 @@ export async function GET(request: NextRequest) {
     // Copiar os parâmetros de consulta da requisição original
     const searchParams = new URLSearchParams(request.nextUrl.searchParams.toString());
     
-    // Adicionar filtros padrão se não estiverem presentes
+    // Adicionar/garantir filtros padrão se não estiverem presentes
     if (!searchParams.has('inStock')) searchParams.set('inStock', 'true');
     if (!searchParams.has('active')) searchParams.set('active', 'true');
     
+    // Garantir que temos o parâmetro warehouseName
+    if (!searchParams.has('warehouseName')) {
+      searchParams.set('warehouseName', 'MKT-Creator');
+    }
+    
+    // Adicionar parâmetros de paginação se não estiverem presentes
+    if (!searchParams.has('page')) searchParams.set('page', '0');
+    if (!searchParams.has('limit')) searchParams.set('limit', '12');
+    
+    // Tratar parâmetro especial categoryIds (array de IDs de categoria)
+    if (searchParams.has('categoryIds')) {
+      try {
+        // Obter e parsear o array JSON
+        const categoryIdsStr = searchParams.get('categoryIds');
+        if (categoryIdsStr) {
+          const categoryIds = JSON.parse(categoryIdsStr);
+          
+          // Se for um array válido, adicionar como filtro específico para a API
+          if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+            console.log(`[TrueCore] Usando múltiplos IDs de categoria: ${categoryIds.join(', ')}`);
+            
+            // Remover o parâmetro original para evitar confusão
+            searchParams.delete('categoryIds');
+            
+            // Adicionar o primeiro ID como categoryId principal
+            searchParams.set('categoryId', categoryIds[0]);
+            
+            // Se houver mais IDs, podemos adicionar como parâmetros adicionais
+            // ou implementar lógica específica para a API do True Core
+          }
+        }
+      } catch (e) {
+        console.error('[TrueCore] Erro ao processar categoryIds:', e);
+      }
+    }
+    
     // Construir a URL completa para a API True Core
-    const endpoint = '/marketing/products';
+    const endpoint = '/marketing/products/warehouse/search';
     const url = `${baseUrl}${endpoint}?${searchParams.toString()}`;
     
     console.log(`[TrueCore] Fazendo requisição para: ${url}`);
@@ -79,14 +126,10 @@ export async function GET(request: NextRequest) {
     
     return Response.json(data);
   } catch (error) {
-    console.error(`[TrueCore] Erro na obtenção de produtos:`, error);
+    console.error(`[TrueCore] Erro na obtenção de produtos por warehouse:`, error);
     return Response.json(
       { error: 'Erro interno ao processar requisição de produtos' },
       { status: 500 }
     );
   }
-}
-
-export async function POST(request: NextRequest) {
-  return TrueCore.handleRequest(request, '/marketing/products');
 } 
