@@ -12,6 +12,11 @@ try {
 }
 
 import path from "path";
+import { fileURLToPath } from "url";
+
+// Obter o diretório atual em ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
