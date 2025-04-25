@@ -74,14 +74,14 @@ export async function POST(request: NextRequest) {
       console.log('[Orders API] Dados do cliente obtidos:', JSON.stringify(customer));
       
       // Determinar o tipo de cliente (Creator ou Top Master)
-      let operation = "Top Master";
+      let operation = "top_master";
       let warehouse = "MKT-Top Master";
       
       if (customer.__category__?.name.includes('Creator') || 
           customer.category?.name?.includes('Creator') ||
           customer.__category__?.name.includes('Atleta') || 
           customer.category?.name?.includes('Atleta')) {
-        operation = "Creator";
+        operation = "creator";
         warehouse = "MKT-Creator";
       }
       
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         status: "PENDING",
         notes: checkoutData.observations || "",
         items: formattedItems,
-        paymentMethod: checkoutData.payment.finalTotal > 0 ? "credit_card" : "voucher",
+        paymentMethod: "pix",
         shippingAddress: formattedAddress,
         shippingCarrier: "Total Express",
         nome_deposito: warehouse
