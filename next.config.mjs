@@ -1,7 +1,7 @@
-let userConfig = undefined
+let userConfig = undefined;
 try {
   // try to import ESM first
-  userConfig = await import('./v0-user-next.config.mjs')
+  userConfig = await import("./v0-user-next.config.mjs");
 } catch (e) {
   try {
     // fallback to CJS import
@@ -10,6 +10,13 @@ try {
     // ignore error
   }
 }
+
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Obter o diretório atual em ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -27,25 +34,33 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
-}
+  webpack: (config) => {
+    // Configuração para resolver o alias @/ corretamente usando path.resolve
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@": path.resolve(__dirname),
+    };
+    return config;
+  },
+};
 
 if (userConfig) {
   // ESM imports will have a "default" property
-  const config = userConfig.default || userConfig
+  const config = userConfig.default || userConfig;
 
   for (const key in config) {
     if (
-      typeof nextConfig[key] === 'object' &&
+      typeof nextConfig[key] === "object" &&
       !Array.isArray(nextConfig[key])
     ) {
       nextConfig[key] = {
         ...nextConfig[key],
         ...config[key],
-      }
+      };
     } else {
-      nextConfig[key] = config[key]
+      nextConfig[key] = config[key];
     }
   }
 }
 
-export default nextConfig
+export default nextConfig;

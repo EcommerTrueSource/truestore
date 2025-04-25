@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm install --no-save --save-dev typescript@5.3.3 && next build",
+  "installCommand": "npm install --legacy-peer-deps",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_API_URL": "https://painel-true-core-app-460815276546.us-central1.run.app/api",
+      "TRUE_CORE_PANEL_URL": "https://painel-true-core-app-460815276546.us-central1.run.app",
+      "NODE_ENV": "production"
+    }
+  }
+} 

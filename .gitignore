@@ -21,9 +21,6 @@ yarn-error.log*
 .env.local
 .cursorrules
 
-# vercel
-.vercel
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
