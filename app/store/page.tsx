@@ -667,7 +667,7 @@ export default function StorePage() {
 
 				console.log(
 					`[Store] Filtrados ${filteredProducts.length} produtos da categoria ${category}`
-				);
+			);
 
 				// Se estamos na primeira página e temos poucos produtos após filtragem,
 				// carregar mais páginas para tentar encontrar mais produtos da categoria
@@ -824,7 +824,7 @@ export default function StorePage() {
 					);
 					const newProducts = filteredProducts.filter(
 						(product: Product) => !existingIds.has(product.id)
-					);
+						);
 
 					if (newProducts.length === 0) {
 						console.log('[Store] Nenhum produto novo para adicionar');
