@@ -1133,24 +1133,12 @@ export default function CheckoutPage() {
 													</span>
 												</div>
 
-												{getAvailableBalance() > 0 && (
-													<div className="flex justify-between items-center text-sm mt-2">
-														<span className="text-gray-700">
-															Valor a pagar na entrega:
-														</span>
-														<span className="font-semibold">
-															{Math.max(0, totalPrice - getAvailableBalance()) >
-															0
-																? formatCurrency(
-																		Math.max(
-																			0,
-																			totalPrice - getAvailableBalance()
-																		)
-																  )
-																: 'R$ 0,00'}
-														</span>
-													</div>
-												)}
+												<div className="flex justify-between items-center text-sm mt-2">
+													<span className="text-gray-700">
+														Valor a pagar na entrega:
+													</span>
+													<span className="font-semibold">R$ 0,00</span>
+												</div>
 											</div>
 										</div>
 
