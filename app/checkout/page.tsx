@@ -291,27 +291,27 @@ export default function CheckoutPage() {
 			// Preparar dados do pedido para enviar à API
 			const orderData = {
 				clerkId: customer?.externalId, // ID do Clerk para buscar dados completos do cliente
-				name,
-				phone,
-				delivery: {
-					zipCode,
-					street,
-					number,
-					complement: complement || 'Não informado',
-					neighborhood,
-					city,
-					state,
-					country: country || 'Brasil',
-				},
-				observations: observations || 'Nenhuma observação',
-				items: cartItems,
+					name,
+					phone,
+					delivery: {
+						zipCode,
+						street,
+						number,
+						complement: complement || 'Não informado',
+						neighborhood,
+						city,
+						state,
+						country: country || 'Brasil',
+					},
+					observations: observations || 'Nenhuma observação',
+					items: cartItems,
 				payment: {
 					subtotal: totalPrice,
 					voucherUsed,
 					finalTotal,
 					remainingVoucher: Math.max(0, voucherBalance - voucherUsed),
 				},
-				timestamp: new Date().toISOString(),
+					timestamp: new Date().toISOString(),
 			};
 
 			console.log('Enviando pedido para processamento...');
@@ -622,8 +622,8 @@ export default function CheckoutPage() {
 							<CardContent>
 								<div className="space-y-6">
 									{/* CEP e País */}
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
 											<CepAutocomplete
 												value={zipCode}
 												onChange={setZipCode}
@@ -632,24 +632,24 @@ export default function CheckoutPage() {
 												setError={setZipCodeError}
 												required
 											/>
-										</div>
+									</div>
 
-										<div>
-											<Label
-												htmlFor="country"
-												className="font-medium text-gray-700 flex items-center gap-2"
-											>
-												<Globe size={14} className="text-gray-500" />
-												País
-											</Label>
+									<div>
+										<Label
+											htmlFor="country"
+											className="font-medium text-gray-700 flex items-center gap-2"
+										>
+											<Globe size={14} className="text-gray-500" />
+											País
+										</Label>
 											<div className="relative mt-1">
-												<Input
-													id="country"
-													value={country}
-													onChange={(e) => setCountry(e.target.value)}
-													placeholder="País"
+											<Input
+												id="country"
+												value={country}
+												onChange={(e) => setCountry(e.target.value)}
+												placeholder="País"
 													className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all bg-gray-50/50"
-												/>
+											/>
 											</div>
 										</div>
 									</div>
@@ -685,70 +685,70 @@ export default function CheckoutPage() {
 
 									{/* Número e Complemento */}
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div>
-											<Label
-												htmlFor="number"
-												className="font-medium text-gray-700 flex items-center gap-2"
-											>
+									<div>
+										<Label
+											htmlFor="number"
+											className="font-medium text-gray-700 flex items-center gap-2"
+										>
 												<Map size={14} className="text-gray-500" />
-												Número <span className="text-brand-magenta">*</span>
-											</Label>
+											Número <span className="text-brand-magenta">*</span>
+										</Label>
 											<div className="relative mt-1">
-												<Input
-													id="number"
-													value={number}
-													onChange={handleNumberChange}
-													placeholder="Número"
-													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
-														numberError
-															? 'border-red-300 focus-visible:ring-red-300'
-															: 'border-gray-200 focus-visible:ring-brand-magenta'
-													}`}
-												/>
-												{numberError && (
-													<span className="text-xs text-red-500 mt-1 block">
-														{numberError}
-													</span>
-												)}
-											</div>
+											<Input
+												id="number"
+												value={number}
+												onChange={handleNumberChange}
+												placeholder="Número"
+												className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
+													numberError
+														? 'border-red-300 focus-visible:ring-red-300'
+														: 'border-gray-200 focus-visible:ring-brand-magenta'
+												}`}
+											/>
+											{numberError && (
+												<span className="text-xs text-red-500 mt-1 block">
+													{numberError}
+												</span>
+											)}
 										</div>
+									</div>
 
-										<div>
-											<Label
-												htmlFor="complement"
+									<div>
+										<Label
+											htmlFor="complement"
 												className="font-medium text-gray-700 flex items-center gap-2"
-											>
+										>
 												<FileText size={14} className="text-gray-500" />
-												Complemento
-											</Label>
+											Complemento
+										</Label>
 											<div className="relative mt-1">
-												<Input
-													id="complement"
-													value={complement}
-													onChange={(e) => setComplement(e.target.value)}
-													placeholder="Casa, Apto, Bloco"
-													className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
-												/>
+											<Input
+												id="complement"
+												value={complement}
+												onChange={(e) => setComplement(e.target.value)}
+												placeholder="Casa, Apto, Bloco"
+												className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
+											/>
 											</div>
 										</div>
 									</div>
 
 									{/* Bairro, Cidade e Estado em layout responsivo */}
 									<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-										<div>
-											<Label
-												htmlFor="neighborhood"
-												className="font-medium text-gray-700 flex items-center gap-2"
-											>
-												<Building size={14} className="text-gray-500" />
-												Bairro <span className="text-brand-magenta">*</span>
-											</Label>
+									<div>
+										<Label
+											htmlFor="neighborhood"
+											className="font-medium text-gray-700 flex items-center gap-2"
+										>
+											<Building size={14} className="text-gray-500" />
+											Bairro <span className="text-brand-magenta">*</span>
+										</Label>
 											<div className="relative mt-1">
-												<Input
-													id="neighborhood"
-													value={neighborhood}
+											<Input
+												id="neighborhood"
+												value={neighborhood}
 													onChange={handleNeighborhoodChange}
-													placeholder="Bairro"
+												placeholder="Bairro"
 													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
 														neighborhoodError
 															? 'border-red-300 focus-visible:ring-red-300'
@@ -760,23 +760,23 @@ export default function CheckoutPage() {
 														{neighborhoodError}
 													</span>
 												)}
-											</div>
 										</div>
+									</div>
 
-										<div>
-											<Label
-												htmlFor="city"
-												className="font-medium text-gray-700 flex items-center gap-2"
-											>
-												<Landmark size={14} className="text-gray-500" />
-												Cidade <span className="text-brand-magenta">*</span>
-											</Label>
+									<div>
+										<Label
+											htmlFor="city"
+											className="font-medium text-gray-700 flex items-center gap-2"
+										>
+											<Landmark size={14} className="text-gray-500" />
+											Cidade <span className="text-brand-magenta">*</span>
+										</Label>
 											<div className="relative mt-1">
-												<Input
-													id="city"
-													value={city}
+											<Input
+												id="city"
+												value={city}
 													onChange={handleCityChange}
-													placeholder="Cidade"
+												placeholder="Cidade"
 													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
 														cityError
 															? 'border-red-300 focus-visible:ring-red-300'
@@ -788,23 +788,23 @@ export default function CheckoutPage() {
 														{cityError}
 													</span>
 												)}
-											</div>
 										</div>
+									</div>
 
-										<div>
-											<Label
-												htmlFor="state"
-												className="font-medium text-gray-700 flex items-center gap-2"
-											>
-												<Flag size={14} className="text-gray-500" />
-												Estado <span className="text-brand-magenta">*</span>
-											</Label>
+									<div>
+										<Label
+											htmlFor="state"
+											className="font-medium text-gray-700 flex items-center gap-2"
+										>
+											<Flag size={14} className="text-gray-500" />
+											Estado <span className="text-brand-magenta">*</span>
+										</Label>
 											<div className="relative mt-1">
-												<Input
-													id="state"
-													value={state}
+											<Input
+												id="state"
+												value={state}
 													onChange={handleStateChange}
-													placeholder="Estado"
+												placeholder="Estado"
 													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
 														stateError
 															? 'border-red-300 focus-visible:ring-red-300'
@@ -816,17 +816,17 @@ export default function CheckoutPage() {
 														{stateError}
 													</span>
 												)}
-											</div>
 										</div>
 									</div>
+								</div>
 
 									<div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800">
-										<AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-										<p className="text-sm">
-											Os itens selecionados estão sujeitos à confirmação de
-											estoque e serão reservados em um momento posterior à
-											conclusão da compra.
-										</p>
+									<AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+									<p className="text-sm">
+										Os itens selecionados estão sujeitos à confirmação de
+										estoque e serão reservados em um momento posterior à
+										conclusão da compra.
+									</p>
 									</div>
 								</div>
 							</CardContent>

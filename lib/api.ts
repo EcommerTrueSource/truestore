@@ -1125,29 +1125,29 @@ export async function searchProductsByTerm({
         }
       } catch (e) {
         console.error(`[API] Erro ao processar resposta de erro:`, e);
-      }
-      
-      // Tratar erros de autorização
-      if (errorStatus === 401 && typeof window !== 'undefined') {
-        console.error('[API] Token expirado ou inválido');
-        tokenStore.clearToken();
-        
-        // Se ainda temos tentativas disponíveis, aguardar e tentar novamente
-        if (retryCount < MAX_RETRIES) {
-          console.log(`[API] Tentando obter novo token e aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          
-          return searchProductsByTerm({
-            term,
-            page, 
-            limit,
-            warehouseName,
-            jwtToken: undefined, // Forçar obtenção de novo token
-            retryCount: retryCount + 1
-          });
         }
         
-        throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      // Tratar erros de autorização
+        if (errorStatus === 401 && typeof window !== 'undefined') {
+          console.error('[API] Token expirado ou inválido');
+          tokenStore.clearToken();
+          
+          // Se ainda temos tentativas disponíveis, aguardar e tentar novamente
+          if (retryCount < MAX_RETRIES) {
+            console.log(`[API] Tentando obter novo token e aguardando ${1000 * (retryCount + 1)}ms antes de tentar novamente...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+            
+            return searchProductsByTerm({
+              term,
+              page, 
+              limit,
+              warehouseName,
+              jwtToken: undefined, // Forçar obtenção de novo token
+              retryCount: retryCount + 1
+            });
+          }
+          
+          throw new Error('Sessão expirada. Por favor, faça login novamente.');
       }
       
       throw new Error(errorMessage);
