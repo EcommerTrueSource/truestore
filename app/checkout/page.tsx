@@ -2,24 +2,24 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import StoreLayout from '@/components/layouts/store-layout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import StoreLayout from '../../components/layouts/store-layout';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import {
 	Card,
 	CardHeader,
 	CardTitle,
 	CardContent,
 	CardFooter,
-} from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+} from '../../components/ui/card';
+import { Textarea } from '../../components/ui/textarea';
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { Checkbox } from '@/components/ui/checkbox';
+} from '../../components/ui/collapsible';
+import { Checkbox } from '../../components/ui/checkbox';
 import {
 	ShoppingBag,
 	ArrowLeft,
@@ -38,11 +38,11 @@ import {
 	AlertCircle,
 	Trash,
 } from 'lucide-react';
-import { useCart } from '@/lib/contexts/cart-context';
-import { CartItem } from '@/components/checkout/cart-item';
-import { OrderSummary } from '@/components/checkout/order-summary';
-import { useToast } from '@/components/ui/use-toast';
-import { formatCurrency } from '@/lib/utils';
+import { useCart } from '../../lib/contexts/cart-context';
+import { CartItem } from '../../components/checkout/cart-item';
+import { OrderSummary } from '../../components/checkout/order-summary';
+import { useToast } from '../../components/ui/use-toast';
+import { formatCurrency } from '../../lib/utils';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -53,10 +53,10 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 	AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from '../../components/ui/alert-dialog';
 import Image from 'next/image';
-import { CepAutocomplete } from '@/components/checkout/cep-autocomplete';
-import { useCustomer } from '@/hooks/use-customer';
+import { CepAutocomplete } from '../../components/checkout/cep-autocomplete';
+import { useCustomer } from '../../hooks/use-customer';
 
 export default function CheckoutPage() {
 	const router = useRouter();
