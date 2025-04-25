@@ -348,27 +348,29 @@ export default function CheckoutPage() {
 
 			if (!response.ok) {
 				console.error('Erro no processamento do pedido:', responseData);
-				
+
 				// Identificar o tipo de erro para exibir a mensagem apropriada
 				if (responseData.error === 'Limite de pedidos atingido') {
 					setErrorDetails({
 						title: 'Limite de Pedidos Atingido',
-						message: responseData.details?.message || 'Você atingiu o limite de pedidos para o período atual.',
+						message:
+							responseData.details?.message ||
+							'Você atingiu o limite de pedidos para o período atual.',
 						type: 'limit',
-						details: responseData.details
+						details: responseData.details,
 					});
 					setOpenErrorDialog(true);
-				} 
-				else if (responseData.error === 'Saldo insuficiente') {
+				} else if (responseData.error === 'Saldo insuficiente') {
 					setErrorDetails({
 						title: 'Saldo Insuficiente',
-						message: responseData.details?.message || 'Você não possui saldo suficiente para realizar este pedido.',
+						message:
+							responseData.details?.message ||
+							'Você não possui saldo suficiente para realizar este pedido.',
 						type: 'balance',
-						details: responseData.details
+						details: responseData.details,
 					});
 					setOpenErrorDialog(true);
-				} 
-				else {
+				} else {
 					// Para outros tipos de erro
 					let errorMessage = 'Ocorreu um erro ao processar seu pedido.';
 					if (responseData.details?.friendlyMessage) {
@@ -376,16 +378,16 @@ export default function CheckoutPage() {
 					} else if (responseData.details?.message) {
 						errorMessage = responseData.details.message;
 					}
-					
+
 					setErrorDetails({
 						title: 'Erro ao Processar Pedido',
 						message: errorMessage,
 						type: 'general',
-						details: responseData.details
+						details: responseData.details,
 					});
 					setOpenErrorDialog(true);
 				}
-				
+
 				return;
 			}
 
@@ -405,11 +407,14 @@ export default function CheckoutPage() {
 			router.push('/confirmation');
 		} catch (error) {
 			console.error('Erro ao processar pedido:', error);
-			
+
 			setErrorDetails({
 				title: 'Erro ao Processar Pedido',
-				message: error instanceof Error ? error.message : 'Ocorreu um erro ao finalizar seu pedido. Tente novamente.',
-				type: 'general'
+				message:
+					error instanceof Error
+						? error.message
+						: 'Ocorreu um erro ao finalizar seu pedido. Tente novamente.',
+				type: 'general',
 			});
 			setOpenErrorDialog(true);
 		} finally {
@@ -659,8 +664,8 @@ export default function CheckoutPage() {
 							<CardContent>
 								<div className="space-y-6">
 									{/* CEP e País */}
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div>
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div>
 											<CepAutocomplete
 												value={zipCode}
 												onChange={setZipCode}
@@ -669,24 +674,24 @@ export default function CheckoutPage() {
 												setError={setZipCodeError}
 												required
 											/>
-									</div>
+										</div>
 
-									<div>
-										<Label
-											htmlFor="country"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Globe size={14} className="text-gray-500" />
-											País
-										</Label>
+										<div>
+											<Label
+												htmlFor="country"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Globe size={14} className="text-gray-500" />
+												País
+											</Label>
 											<div className="relative mt-1">
-											<Input
-												id="country"
-												value={country}
-												onChange={(e) => setCountry(e.target.value)}
-												placeholder="País"
+												<Input
+													id="country"
+													value={country}
+													onChange={(e) => setCountry(e.target.value)}
+													placeholder="País"
 													className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all bg-gray-50/50"
-											/>
+												/>
 											</div>
 										</div>
 									</div>
@@ -722,70 +727,70 @@ export default function CheckoutPage() {
 
 									{/* Número e Complemento */}
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div>
-										<Label
-											htmlFor="number"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-												<Map size={14} className="text-gray-500" />
-											Número <span className="text-brand-magenta">*</span>
-										</Label>
-											<div className="relative mt-1">
-											<Input
-												id="number"
-												value={number}
-												onChange={handleNumberChange}
-												placeholder="Número"
-												className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
-													numberError
-														? 'border-red-300 focus-visible:ring-red-300'
-														: 'border-gray-200 focus-visible:ring-brand-magenta'
-												}`}
-											/>
-											{numberError && (
-												<span className="text-xs text-red-500 mt-1 block">
-													{numberError}
-												</span>
-											)}
-										</div>
-									</div>
-
-									<div>
-										<Label
-											htmlFor="complement"
+										<div>
+											<Label
+												htmlFor="number"
 												className="font-medium text-gray-700 flex items-center gap-2"
-										>
-												<FileText size={14} className="text-gray-500" />
-											Complemento
-										</Label>
+											>
+												<Map size={14} className="text-gray-500" />
+												Número <span className="text-brand-magenta">*</span>
+											</Label>
 											<div className="relative mt-1">
-											<Input
-												id="complement"
-												value={complement}
-												onChange={(e) => setComplement(e.target.value)}
-												placeholder="Casa, Apto, Bloco"
-												className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
-											/>
+												<Input
+													id="number"
+													value={number}
+													onChange={handleNumberChange}
+													placeholder="Número"
+													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
+														numberError
+															? 'border-red-300 focus-visible:ring-red-300'
+															: 'border-gray-200 focus-visible:ring-brand-magenta'
+													}`}
+												/>
+												{numberError && (
+													<span className="text-xs text-red-500 mt-1 block">
+														{numberError}
+													</span>
+												)}
+											</div>
+										</div>
+
+										<div>
+											<Label
+												htmlFor="complement"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<FileText size={14} className="text-gray-500" />
+												Complemento
+											</Label>
+											<div className="relative mt-1">
+												<Input
+													id="complement"
+													value={complement}
+													onChange={(e) => setComplement(e.target.value)}
+													placeholder="Casa, Apto, Bloco"
+													className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
+												/>
 											</div>
 										</div>
 									</div>
 
 									{/* Bairro, Cidade e Estado em layout responsivo */}
 									<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-									<div>
-										<Label
-											htmlFor="neighborhood"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Building size={14} className="text-gray-500" />
-											Bairro <span className="text-brand-magenta">*</span>
-										</Label>
+										<div>
+											<Label
+												htmlFor="neighborhood"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Building size={14} className="text-gray-500" />
+												Bairro <span className="text-brand-magenta">*</span>
+											</Label>
 											<div className="relative mt-1">
-											<Input
-												id="neighborhood"
-												value={neighborhood}
+												<Input
+													id="neighborhood"
+													value={neighborhood}
 													onChange={handleNeighborhoodChange}
-												placeholder="Bairro"
+													placeholder="Bairro"
 													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
 														neighborhoodError
 															? 'border-red-300 focus-visible:ring-red-300'
@@ -797,23 +802,23 @@ export default function CheckoutPage() {
 														{neighborhoodError}
 													</span>
 												)}
+											</div>
 										</div>
-									</div>
 
-									<div>
-										<Label
-											htmlFor="city"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Landmark size={14} className="text-gray-500" />
-											Cidade <span className="text-brand-magenta">*</span>
-										</Label>
+										<div>
+											<Label
+												htmlFor="city"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Landmark size={14} className="text-gray-500" />
+												Cidade <span className="text-brand-magenta">*</span>
+											</Label>
 											<div className="relative mt-1">
-											<Input
-												id="city"
-												value={city}
+												<Input
+													id="city"
+													value={city}
 													onChange={handleCityChange}
-												placeholder="Cidade"
+													placeholder="Cidade"
 													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
 														cityError
 															? 'border-red-300 focus-visible:ring-red-300'
@@ -825,23 +830,23 @@ export default function CheckoutPage() {
 														{cityError}
 													</span>
 												)}
+											</div>
 										</div>
-									</div>
 
-									<div>
-										<Label
-											htmlFor="state"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Flag size={14} className="text-gray-500" />
-											Estado <span className="text-brand-magenta">*</span>
-										</Label>
+										<div>
+											<Label
+												htmlFor="state"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Flag size={14} className="text-gray-500" />
+												Estado <span className="text-brand-magenta">*</span>
+											</Label>
 											<div className="relative mt-1">
-											<Input
-												id="state"
-												value={state}
+												<Input
+													id="state"
+													value={state}
 													onChange={handleStateChange}
-												placeholder="Estado"
+													placeholder="Estado"
 													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
 														stateError
 															? 'border-red-300 focus-visible:ring-red-300'
@@ -853,17 +858,17 @@ export default function CheckoutPage() {
 														{stateError}
 													</span>
 												)}
+											</div>
 										</div>
 									</div>
-								</div>
 
 									<div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800">
-									<AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-									<p className="text-sm">
-										Os itens selecionados estão sujeitos à confirmação de
-										estoque e serão reservados em um momento posterior à
-										conclusão da compra.
-									</p>
+										<AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+										<p className="text-sm">
+											Os itens selecionados estão sujeitos à confirmação de
+											estoque e serão reservados em um momento posterior à
+											conclusão da compra.
+										</p>
 									</div>
 								</div>
 							</CardContent>
@@ -1111,12 +1116,20 @@ export default function CheckoutPage() {
 
 												<div className="flex justify-between items-center text-sm mt-1">
 													<span className="text-gray-500">Frete:</span>
-													<span className="text-green-600 font-medium">Grátis</span>
+													<span className="text-green-600 font-medium">
+														Grátis
+													</span>
 												</div>
 												<div className="flex justify-between font-medium text-base mt-3">
 													<span>Total</span>
 													<span className="text-brand-magenta">
-														{formatCurrency(Math.max(0, totalPrice - Math.min(getAvailableBalance(), totalPrice)))}
+														{formatCurrency(
+															Math.max(
+																0,
+																totalPrice -
+																	Math.min(getAvailableBalance(), totalPrice)
+															)
+														)}
 													</span>
 												</div>
 
@@ -1126,8 +1139,14 @@ export default function CheckoutPage() {
 															Valor a pagar na entrega:
 														</span>
 														<span className="font-semibold">
-															{Math.max(0, totalPrice - getAvailableBalance()) > 0
-																? formatCurrency(Math.max(0, totalPrice - getAvailableBalance()))
+															{Math.max(0, totalPrice - getAvailableBalance()) >
+															0
+																? formatCurrency(
+																		Math.max(
+																			0,
+																			totalPrice - getAvailableBalance()
+																		)
+																  )
 																: 'R$ 0,00'}
 														</span>
 													</div>
@@ -1244,23 +1263,31 @@ export default function CheckoutPage() {
 			<AlertDialog open={openErrorDialog} onOpenChange={setOpenErrorDialog}>
 				<AlertDialogContent className="max-w-lg">
 					<AlertDialogHeader>
-						<AlertDialogTitle className={`text-xl flex items-center gap-2 ${
-							errorDetails?.type === 'limit' 
-								? 'text-amber-600' 
-								: errorDetails?.type === 'balance' 
-									? 'text-red-600' 
+						<AlertDialogTitle
+							className={`text-xl flex items-center gap-2 ${
+								errorDetails?.type === 'limit'
+									? 'text-amber-600'
+									: errorDetails?.type === 'balance'
+									? 'text-red-600'
 									: 'text-gray-900'
-						}`}>
-							{errorDetails?.type === 'limit' && <Calendar className="h-5 w-5" />}
-							{errorDetails?.type === 'balance' && <DollarSign className="h-5 w-5" />}
-							{errorDetails?.type === 'general' && <ShieldAlert className="h-5 w-5" />}
+							}`}
+						>
+							{errorDetails?.type === 'limit' && (
+								<Calendar className="h-5 w-5" />
+							)}
+							{errorDetails?.type === 'balance' && (
+								<DollarSign className="h-5 w-5" />
+							)}
+							{errorDetails?.type === 'general' && (
+								<ShieldAlert className="h-5 w-5" />
+							)}
 							{errorDetails?.title}
 						</AlertDialogTitle>
 						<AlertDialogDescription className="text-base mt-2 text-gray-700">
 							{errorDetails?.message}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					
+
 					{errorDetails?.type === 'limit' && errorDetails.details && (
 						<div className="my-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
 							<h4 className="font-medium text-amber-800 mb-2 flex items-center gap-2">
@@ -1268,13 +1295,32 @@ export default function CheckoutPage() {
 								Informações de Limite
 							</h4>
 							<div className="space-y-2 text-sm text-amber-700">
-								<p>Você já realizou <strong>{errorDetails.details.used}</strong> de <strong>{errorDetails.details.limit}</strong> pedidos permitidos.</p>
-								<p>Período atual: <strong>{new Date(errorDetails.details.period?.start).toLocaleDateString()}</strong> até <strong>{new Date(errorDetails.details.period?.end).toLocaleDateString()}</strong></p>
-								<p className="text-amber-900 font-medium mt-3">Seu limite será renovado após o término deste período.</p>
+								<p>
+									Você já realizou <strong>{errorDetails.details.used}</strong>{' '}
+									de <strong>{errorDetails.details.limit}</strong> pedidos
+									permitidos.
+								</p>
+								<p>
+									Período atual:{' '}
+									<strong>
+										{new Date(
+											errorDetails.details.period?.start
+										).toLocaleDateString()}
+									</strong>{' '}
+									até{' '}
+									<strong>
+										{new Date(
+											errorDetails.details.period?.end
+										).toLocaleDateString()}
+									</strong>
+								</p>
+								<p className="text-amber-900 font-medium mt-3">
+									Seu limite será renovado após o término deste período.
+								</p>
 							</div>
 						</div>
 					)}
-					
+
 					{errorDetails?.type === 'balance' && errorDetails.details && (
 						<div className="my-4 p-4 bg-red-50 rounded-lg border border-red-200">
 							<h4 className="font-medium text-red-800 mb-2 flex items-center gap-2">
@@ -1282,22 +1328,46 @@ export default function CheckoutPage() {
 								Informações de Saldo
 							</h4>
 							<div className="space-y-2 text-sm text-red-700">
-								<p>Valor do pedido: <strong>{formatCurrency(Number(totalPrice))}</strong></p>
-								<p>Saldo disponível: <strong>{formatCurrency(Number(errorDetails.details.remaining))}</strong></p>
+								<p>
+									Valor do pedido:{' '}
+									<strong>{formatCurrency(Number(totalPrice))}</strong>
+								</p>
+								<p>
+									Saldo disponível:{' '}
+									<strong>
+										{formatCurrency(Number(errorDetails.details.remaining))}
+									</strong>
+								</p>
 								{errorDetails.details.period && (
-									<p>Período: <strong>{new Date(errorDetails.details.period?.start).toLocaleDateString()}</strong> até <strong>{new Date(errorDetails.details.period?.end).toLocaleDateString()}</strong></p>
+									<p>
+										Período:{' '}
+										<strong>
+											{new Date(
+												errorDetails.details.period?.start
+											).toLocaleDateString()}
+										</strong>{' '}
+										até{' '}
+										<strong>
+											{new Date(
+												errorDetails.details.period?.end
+											).toLocaleDateString()}
+										</strong>
+									</p>
 								)}
 							</div>
-							
+
 							<div className="mt-4 pt-3 border-t border-red-200">
 								<p className="text-sm text-red-800 flex items-center gap-2">
 									<Store className="h-4 w-4" />
-									<span>Para realizar este pedido, considere remover itens do carrinho para reduzir o valor total.</span>
+									<span>
+										Para realizar este pedido, considere remover itens do
+										carrinho para reduzir o valor total.
+									</span>
 								</p>
 							</div>
 						</div>
 					)}
-					
+
 					<AlertDialogFooter className="mt-4">
 						<Button
 							onClick={() => setOpenErrorDialog(false)}
@@ -1308,7 +1378,6 @@ export default function CheckoutPage() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
-		</div>
-	</StoreLayout>
-);
+		</StoreLayout>
+	);
 }
