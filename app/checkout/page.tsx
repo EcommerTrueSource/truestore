@@ -55,10 +55,13 @@ import {
 	AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Image from 'next/image';
+import { CepAutocomplete } from '@/components/checkout/cep-autocomplete';
+import { useCustomer } from '@/hooks/use-customer';
 
 export default function CheckoutPage() {
 	const router = useRouter();
 	const { cartItems, totalItems, clearCart, totalPrice } = useCart();
+	const { customer, getAvailableBalance } = useCustomer();
 	const { toast } = useToast();
 	const [openAlertDialog, setOpenAlertDialog] = useState(false);
 	const [openExitDialog, setOpenExitDialog] = useState(false);
@@ -84,22 +87,15 @@ export default function CheckoutPage() {
 	const [zipCodeError, setZipCodeError] = useState('');
 	const [streetError, setStreetError] = useState('');
 	const [numberError, setNumberError] = useState('');
+	const [neighborhoodError, setNeighborhoodError] = useState('');
+	const [cityError, setCityError] = useState('');
+	const [stateError, setStateError] = useState('');
 
 	// Adicionar estado para controlar o diálogo
 	const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
 
 	// Adicionar um novo estado para controlar se o usuário concordou com os termos
 	const [agreedToTerms, setAgreedToTerms] = useState(false);
-
-	// Formatação e validação de código postal
-	const validateZipCode = (value: string) => {
-		const numericZipCode = value.replace(/\D/g, '');
-		if (numericZipCode.length <= 5) {
-			return numericZipCode;
-		} else {
-			return `${numericZipCode.slice(0, 5)}-${numericZipCode.slice(5, 8)}`;
-		}
-	};
 
 	// Formatação e validação de telefone
 	const formatPhone = (value: string) => {
@@ -147,20 +143,6 @@ export default function CheckoutPage() {
 		}
 	};
 
-	const handleZipCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const formattedZipCode = validateZipCode(e.target.value);
-		setZipCode(formattedZipCode);
-
-		if (
-			formattedZipCode.length > 0 &&
-			formattedZipCode.replace(/\D/g, '').length !== 8
-		) {
-			setZipCodeError('CEP inválido. Deve conter 8 dígitos.');
-		} else {
-			setZipCodeError('');
-		}
-	};
-
 	const handleStreetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const newStreet = e.target.value;
 		setStreet(newStreet);
@@ -183,47 +165,98 @@ export default function CheckoutPage() {
 		}
 	};
 
+	const handleNeighborhoodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const newNeighborhood = e.target.value;
+		setNeighborhood(newNeighborhood);
+
+		if (
+			newNeighborhood.trim().length > 0 &&
+			newNeighborhood.trim().length < 2
+		) {
+			setNeighborhoodError('Bairro muito curto.');
+		} else {
+			setNeighborhoodError('');
+		}
+	};
+
+	const handleCityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const newCity = e.target.value;
+		setCity(newCity);
+
+		if (newCity.trim().length > 0 && newCity.trim().length < 2) {
+			setCityError('Cidade muito curta.');
+		} else {
+			setCityError('');
+		}
+	};
+
+	const handleStateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const newState = e.target.value;
+		setState(newState);
+
+		if (newState.trim().length > 0 && newState.trim().length < 2) {
+			setStateError('Estado muito curto.');
+		} else {
+			setStateError('');
+		}
+	};
+
 	// Verifica se o formulário é válido
 	const isFormValid = () => {
 		// Validar campos obrigatórios
+		let isValid = true;
+
 		if (!name.trim()) {
 			setNameError('Nome é obrigatório');
-			return false;
+			isValid = false;
 		}
 
 		if (!phone.trim()) {
 			setPhoneError('Telefone é obrigatório');
-			return false;
+			isValid = false;
 		}
 
 		if (!street.trim()) {
 			setStreetError('Endereço é obrigatório');
-			return false;
+			isValid = false;
 		}
 
 		if (!number.trim()) {
 			setNumberError('Número é obrigatório');
-			return false;
+			isValid = false;
 		}
 
 		if (!zipCode.trim()) {
 			setZipCodeError('CEP é obrigatório');
-			return false;
+			isValid = false;
 		}
 
-		if (!city.trim() || !state.trim() || !neighborhood.trim()) {
-			toast({
-				title: 'Campos incompletos',
-				description:
-					'Preencha todos os campos de endereço obrigatórios (Bairro, Cidade e Estado).',
-				variant: 'destructive',
-			});
-			return false;
+		if (!neighborhood.trim()) {
+			setNeighborhoodError('Bairro é obrigatório');
+			isValid = false;
+		}
+
+		if (!city.trim()) {
+			setCityError('Cidade é obrigatória');
+			isValid = false;
+		}
+
+		if (!state.trim()) {
+			setStateError('Estado é obrigatório');
+			isValid = false;
 		}
 
 		// Verificar se há erros de validação
 		return (
-			!nameError && !phoneError && !zipCodeError && !streetError && !numberError
+			isValid &&
+			!nameError &&
+			!phoneError &&
+			!zipCodeError &&
+			!streetError &&
+			!numberError &&
+			!neighborhoodError &&
+			!cityError &&
+			!stateError
 		);
 	};
 
@@ -250,37 +283,96 @@ export default function CheckoutPage() {
 		setIsSubmitting(true);
 
 		try {
-			// Simulação de processamento do pedido com delay reduzido
-			await new Promise((resolve) => setTimeout(resolve, 300));
+			// Obter o saldo do voucher e calcular quanto vai ser usado
+			const voucherBalance = getAvailableBalance();
+			const voucherUsed = Math.min(voucherBalance, totalPrice);
+			const finalTotal = Math.max(0, totalPrice - voucherUsed);
 
+			// Preparar dados do pedido para enviar à API
+			const orderData = {
+				clerkId: customer?.externalId, // ID do Clerk para buscar dados completos do cliente
+				name,
+				phone,
+				delivery: {
+					zipCode,
+					street,
+					number,
+					complement: complement || 'Não informado',
+					neighborhood,
+					city,
+					state,
+					country: country || 'Brasil',
+				},
+				observations: observations || 'Nenhuma observação',
+				items: cartItems,
+				payment: {
+					subtotal: totalPrice,
+					voucherUsed,
+					finalTotal,
+					remainingVoucher: Math.max(0, voucherBalance - voucherUsed),
+				},
+				timestamp: new Date().toISOString(),
+			};
+
+			console.log('Enviando pedido para processamento...');
+
+			// Enviar pedido para a API interna
+			const response = await fetch('/api/orders', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				credentials: 'include', // Para enviar cookies (token)
+				body: JSON.stringify(orderData),
+			});
+
+			let responseData;
+			try {
+				responseData = await response.json();
+			} catch (e) {
+				console.error('Erro ao processar resposta:', e);
+				throw new Error('Falha ao processar resposta do servidor');
+			}
+
+			if (!response.ok) {
+				const errorMessage = responseData?.error || 'Erro desconhecido';
+				const errorDetails = responseData?.details
+					? typeof responseData.details === 'string'
+						? responseData.details
+						: JSON.stringify(responseData.details)
+					: '';
+
+				console.error(
+					'Erro no processamento do pedido:',
+					errorMessage,
+					errorDetails
+				);
+				throw new Error(`Erro: ${errorMessage} ${errorDetails}`);
+			}
+
+			// Pedido processado com sucesso
+			console.log('Pedido criado com sucesso:', responseData);
+
+			// Armazenar dados para a página de confirmação
 			sessionStorage.setItem(
 				'orderData',
 				JSON.stringify({
-					name,
-					phone,
-					delivery: {
-						zipCode,
-						street,
-						number,
-						complement: complement || 'Não informado',
-						neighborhood,
-						city,
-						state,
-						country: country || 'Brasil',
-					},
-					observations: observations || 'Nenhuma observação',
-					items: cartItems,
-					timestamp: new Date().toISOString(),
+					...orderData,
+					orderId: responseData.id || 'ID não disponível',
 				})
 			);
 
 			clearCart();
 			router.push('/confirmation');
 		} catch (error) {
+			console.error('Erro ao processar pedido:', error);
+
 			toast({
 				title: 'Erro ao processar pedido',
 				description:
-					'Ocorreu um erro ao finalizar seu pedido. Tente novamente.',
+					error instanceof Error
+						? error.message
+						: 'Ocorreu um erro ao finalizar seu pedido. Tente novamente.',
 				variant: 'destructive',
 			});
 		} finally {
@@ -297,6 +389,26 @@ export default function CheckoutPage() {
 	const handleExitPage = () => {
 		setOpenExitDialog(false);
 		router.back();
+	};
+
+	// Em seu lugar, adicionar o seguinte handler para quando o endereço for encontrado
+	const handleAddressFound = (addressData: {
+		street: string;
+		neighborhood: string;
+		city: string;
+		state: string;
+	}) => {
+		// Preencher os campos com os dados encontrados
+		setStreet(addressData.street);
+		setNeighborhood(addressData.neighborhood);
+		setCity(addressData.city);
+		setState(addressData.state);
+
+		// Limpar possíveis erros
+		setStreetError('');
+		setNeighborhoodError('');
+		setCityError('');
+		setStateError('');
 	};
 
 	if (totalItems === 0) {
@@ -502,58 +614,48 @@ export default function CheckoutPage() {
 									<MapPin size={18} className="text-brand-magenta" />
 									Informações de Entrega
 								</CardTitle>
+								<p className="text-xs text-gray-500">
+									Os campos marcados com{' '}
+									<span className="text-brand-magenta">*</span> são obrigatórios
+								</p>
 							</CardHeader>
 							<CardContent>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div>
-										<Label
-											htmlFor="zipCode"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<MapPin size={14} className="text-gray-500" />
-											CEP <span className="text-brand-magenta">*</span>
-										</Label>
-										<div className="relative mt-1 group">
-											<Input
-												id="zipCode"
+								<div className="space-y-6">
+									{/* CEP e País */}
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div>
+											<CepAutocomplete
 												value={zipCode}
-												onChange={handleZipCodeChange}
-												placeholder="00000-000"
-												className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
-													zipCodeError
-														? 'border-red-300 focus-visible:ring-red-300'
-														: 'border-gray-200 focus-visible:ring-brand-magenta'
-												}`}
-												maxLength={9}
+												onChange={setZipCode}
+												onAddressFound={handleAddressFound}
+												error={zipCodeError}
+												setError={setZipCodeError}
+												required
 											/>
-											{zipCodeError && (
-												<p className="text-red-500 text-xs mt-1">
-													{zipCodeError}
-												</p>
-											)}
+										</div>
+
+										<div>
+											<Label
+												htmlFor="country"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Globe size={14} className="text-gray-500" />
+												País
+											</Label>
+											<div className="relative mt-1">
+												<Input
+													id="country"
+													value={country}
+													onChange={(e) => setCountry(e.target.value)}
+													placeholder="País"
+													className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all bg-gray-50/50"
+												/>
+											</div>
 										</div>
 									</div>
 
+									{/* Rua/Avenida */}
 									<div>
-										<Label
-											htmlFor="country"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Globe size={14} className="text-gray-500" />
-											País
-										</Label>
-										<div className="relative mt-1 group">
-											<Input
-												id="country"
-												value={country}
-												onChange={(e) => setCountry(e.target.value)}
-												placeholder="País"
-												className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
-											/>
-										</div>
-									</div>
-
-									<div className="md:col-span-2">
 										<Label
 											htmlFor="street"
 											className="font-medium text-gray-700 flex items-center gap-2"
@@ -561,7 +663,7 @@ export default function CheckoutPage() {
 											<Home size={14} className="text-gray-500" />
 											Av/Rua <span className="text-brand-magenta">*</span>
 										</Label>
-										<div className="relative mt-1 group">
+										<div className="relative mt-1">
 											<Input
 												id="street"
 												value={street}
@@ -581,116 +683,151 @@ export default function CheckoutPage() {
 										</div>
 									</div>
 
-									<div>
-										<Label
-											htmlFor="number"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											Número <span className="text-brand-magenta">*</span>
-										</Label>
-										<div className="relative mt-1 group">
-											<Input
-												id="number"
-												value={number}
-												onChange={handleNumberChange}
-												placeholder="Número"
-												className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
-													numberError
-														? 'border-red-300 focus-visible:ring-red-300'
-														: 'border-gray-200 focus-visible:ring-brand-magenta'
-												}`}
-											/>
-											{numberError && (
-												<span className="text-xs text-red-500 mt-1 block">
-													{numberError}
-												</span>
-											)}
+									{/* Número e Complemento */}
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div>
+											<Label
+												htmlFor="number"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Map size={14} className="text-gray-500" />
+												Número <span className="text-brand-magenta">*</span>
+											</Label>
+											<div className="relative mt-1">
+												<Input
+													id="number"
+													value={number}
+													onChange={handleNumberChange}
+													placeholder="Número"
+													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
+														numberError
+															? 'border-red-300 focus-visible:ring-red-300'
+															: 'border-gray-200 focus-visible:ring-brand-magenta'
+													}`}
+												/>
+												{numberError && (
+													<span className="text-xs text-red-500 mt-1 block">
+														{numberError}
+													</span>
+												)}
+											</div>
+										</div>
+
+										<div>
+											<Label
+												htmlFor="complement"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<FileText size={14} className="text-gray-500" />
+												Complemento
+											</Label>
+											<div className="relative mt-1">
+												<Input
+													id="complement"
+													value={complement}
+													onChange={(e) => setComplement(e.target.value)}
+													placeholder="Casa, Apto, Bloco"
+													className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
+												/>
+											</div>
 										</div>
 									</div>
 
-									<div>
-										<Label
-											htmlFor="complement"
-											className="font-medium text-gray-700"
-										>
-											Complemento
-										</Label>
-										<div className="relative mt-1 group">
-											<Input
-												id="complement"
-												value={complement}
-												onChange={(e) => setComplement(e.target.value)}
-												placeholder="Casa, Apto, Bloco"
-												className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
-											/>
+									{/* Bairro, Cidade e Estado em layout responsivo */}
+									<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+										<div>
+											<Label
+												htmlFor="neighborhood"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Building size={14} className="text-gray-500" />
+												Bairro <span className="text-brand-magenta">*</span>
+											</Label>
+											<div className="relative mt-1">
+												<Input
+													id="neighborhood"
+													value={neighborhood}
+													onChange={handleNeighborhoodChange}
+													placeholder="Bairro"
+													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
+														neighborhoodError
+															? 'border-red-300 focus-visible:ring-red-300'
+															: 'border-gray-200 focus-visible:ring-brand-magenta'
+													}`}
+												/>
+												{neighborhoodError && (
+													<span className="text-xs text-red-500 mt-1 block">
+														{neighborhoodError}
+													</span>
+												)}
+											</div>
+										</div>
+
+										<div>
+											<Label
+												htmlFor="city"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Landmark size={14} className="text-gray-500" />
+												Cidade <span className="text-brand-magenta">*</span>
+											</Label>
+											<div className="relative mt-1">
+												<Input
+													id="city"
+													value={city}
+													onChange={handleCityChange}
+													placeholder="Cidade"
+													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
+														cityError
+															? 'border-red-300 focus-visible:ring-red-300'
+															: 'border-gray-200 focus-visible:ring-brand-magenta'
+													}`}
+												/>
+												{cityError && (
+													<span className="text-xs text-red-500 mt-1 block">
+														{cityError}
+													</span>
+												)}
+											</div>
+										</div>
+
+										<div>
+											<Label
+												htmlFor="state"
+												className="font-medium text-gray-700 flex items-center gap-2"
+											>
+												<Flag size={14} className="text-gray-500" />
+												Estado <span className="text-brand-magenta">*</span>
+											</Label>
+											<div className="relative mt-1">
+												<Input
+													id="state"
+													value={state}
+													onChange={handleStateChange}
+													placeholder="Estado"
+													className={`pl-3 pr-3 py-2 h-11 rounded-lg border transition-all ${
+														stateError
+															? 'border-red-300 focus-visible:ring-red-300'
+															: 'border-gray-200 focus-visible:ring-brand-magenta'
+													}`}
+												/>
+												{stateError && (
+													<span className="text-xs text-red-500 mt-1 block">
+														{stateError}
+													</span>
+												)}
+											</div>
 										</div>
 									</div>
 
-									<div>
-										<Label
-											htmlFor="neighborhood"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Building size={14} className="text-gray-500" />
-											Bairro <span className="text-brand-magenta">*</span>
-										</Label>
-										<div className="relative mt-1 group">
-											<Input
-												id="neighborhood"
-												value={neighborhood}
-												onChange={(e) => setNeighborhood(e.target.value)}
-												placeholder="Bairro"
-												className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
-											/>
-										</div>
+									<div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800">
+										<AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+										<p className="text-sm">
+											Os itens selecionados estão sujeitos à confirmação de
+											estoque e serão reservados em um momento posterior à
+											conclusão da compra.
+										</p>
 									</div>
-
-									<div>
-										<Label
-											htmlFor="city"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Landmark size={14} className="text-gray-500" />
-											Cidade <span className="text-brand-magenta">*</span>
-										</Label>
-										<div className="relative mt-1 group">
-											<Input
-												id="city"
-												value={city}
-												onChange={(e) => setCity(e.target.value)}
-												placeholder="Cidade"
-												className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
-											/>
-										</div>
-									</div>
-
-									<div>
-										<Label
-											htmlFor="state"
-											className="font-medium text-gray-700 flex items-center gap-2"
-										>
-											<Flag size={14} className="text-gray-500" />
-											Estado <span className="text-brand-magenta">*</span>
-										</Label>
-										<div className="relative mt-1 group">
-											<Input
-												id="state"
-												value={state}
-												onChange={(e) => setState(e.target.value)}
-												placeholder="Estado"
-												className="pl-3 pr-3 py-2 h-11 rounded-lg border border-gray-200 focus-visible:ring-brand-magenta transition-all"
-											/>
-										</div>
-									</div>
-								</div>
-
-								<div className="mt-6 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800">
-									<AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-									<p className="text-sm">
-										Os itens selecionados estão sujeitos à confirmação de
-										estoque e serão reservados em um momento posterior à
-										conclusão da compra.
-									</p>
 								</div>
 							</CardContent>
 						</Card>
@@ -920,6 +1057,21 @@ export default function CheckoutPage() {
 													<span className="text-gray-500">Subtotal:</span>
 													<span>{formatCurrency(totalPrice)}</span>
 												</div>
+
+												{getAvailableBalance() > 0 && (
+													<div className="flex justify-between items-center text-sm mt-1">
+														<span className="text-green-600">
+															Voucher aplicado:
+														</span>
+														<span className="text-green-600">
+															-{' '}
+															{formatCurrency(
+																Math.min(getAvailableBalance(), totalPrice)
+															)}
+														</span>
+													</div>
+												)}
+
 												<div className="flex justify-between items-center text-sm mt-1">
 													<span className="text-gray-500">Frete:</span>
 													<span>Grátis</span>
@@ -930,6 +1082,25 @@ export default function CheckoutPage() {
 														{formatCurrency(totalPrice)}
 													</span>
 												</div>
+
+												{getAvailableBalance() > 0 && (
+													<div className="flex justify-between items-center text-sm mt-2">
+														<span className="text-gray-700">
+															Valor a pagar na entrega:
+														</span>
+														<span className="font-semibold">
+															{Math.max(0, totalPrice - getAvailableBalance()) >
+															0
+																? formatCurrency(
+																		Math.max(
+																			0,
+																			totalPrice - getAvailableBalance()
+																		)
+																  )
+																: 'R$ 0,00'}
+														</span>
+													</div>
+												)}
 											</div>
 										</div>
 

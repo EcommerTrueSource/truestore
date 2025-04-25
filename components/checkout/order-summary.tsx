@@ -2,8 +2,19 @@
 
 import { useCart } from '@/lib/contexts/cart-context';
 import { formatCurrency } from '@/lib/utils';
-import { ShoppingBag, CreditCard, Tag, Truck, Calculator } from 'lucide-react';
+import {
+	ShoppingBag,
+	CreditCard,
+	Tag,
+	Truck,
+	Calculator,
+	Wallet,
+	Banknote,
+} from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { useCustomer } from '@/hooks/use-customer';
+import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 
 interface OrderSummaryProps {
 	className?: string;
@@ -11,6 +22,31 @@ interface OrderSummaryProps {
 
 export function OrderSummary({ className }: OrderSummaryProps) {
 	const { cartItems, totalItems, totalPrice } = useCart();
+	const { customer, isLoading, getAvailableBalance } = useCustomer();
+	const [voucherBalance, setVoucherBalance] = useState(0);
+	const [finalTotal, setFinalTotal] = useState(totalPrice);
+
+	// Atualizar o saldo do voucher e o total final quando os dados mudarem
+	useEffect(() => {
+		if (!isLoading && customer) {
+			const balance = getAvailableBalance();
+			setVoucherBalance(balance);
+
+			// Calcular o total final após aplicar o voucher
+			// Se o saldo for maior que o preço total, o cliente não paga nada
+			const newTotal = Math.max(0, totalPrice - balance);
+			setFinalTotal(newTotal);
+		} else {
+			setVoucherBalance(0);
+			setFinalTotal(totalPrice);
+		}
+	}, [isLoading, customer, totalPrice, getAvailableBalance]);
+
+	// Valor do voucher a ser usado nesta compra (limitado ao totalPrice)
+	const voucherUsed = Math.min(voucherBalance, totalPrice);
+
+	// Saldo restante após esta compra
+	const remainingBalance = Math.max(0, voucherBalance - totalPrice);
 
 	return (
 		<div
@@ -26,6 +62,39 @@ export function OrderSummary({ className }: OrderSummaryProps) {
 					Resumo do Pedido
 				</h2>
 			</div>
+
+			{!isLoading && customer && voucherBalance > 0 && (
+				<motion.div
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					className="mb-4 p-4 bg-brand-magenta/10 rounded-lg border border-brand-magenta/20"
+				>
+					<div className="flex items-center gap-2 mb-2">
+						<Wallet size={16} className="text-brand-magenta" />
+						<h3 className="font-medium text-brand-magenta">Seu Voucher</h3>
+					</div>
+					<div className="flex flex-col gap-1 text-sm">
+						<div className="flex justify-between">
+							<span className="text-gray-600">Saldo disponível:</span>
+							<span className="font-semibold">
+								{formatCurrency(voucherBalance)}
+							</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-600">Utilizado nesta compra:</span>
+							<span className="font-semibold">
+								{formatCurrency(voucherUsed)}
+							</span>
+						</div>
+						<div className="flex justify-between border-t border-dashed border-brand-magenta/20 pt-1 mt-1">
+							<span className="text-gray-600">Saldo restante:</span>
+							<span className="font-semibold">
+								{formatCurrency(remainingBalance)}
+							</span>
+						</div>
+					</div>
+				</motion.div>
+			)}
 
 			<div className="space-y-3">
 				<div className="flex justify-between items-center">
@@ -80,6 +149,18 @@ export function OrderSummary({ className }: OrderSummaryProps) {
 						<span className="text-gray-700">{formatCurrency(totalPrice)}</span>
 					</div>
 
+					{voucherUsed > 0 && (
+						<div className="flex justify-between items-center text-sm">
+							<div className="flex items-center gap-2">
+								<Banknote size={14} className="text-green-500" />
+								<span className="text-green-600">Voucher aplicado:</span>
+							</div>
+							<span className="text-green-600 font-medium">
+								- {formatCurrency(voucherUsed)}
+							</span>
+						</div>
+					)}
+
 					<div className="flex justify-between items-center text-sm">
 						<div className="flex items-center gap-2">
 							<Truck size={14} className="text-gray-400" />
@@ -100,10 +181,21 @@ export function OrderSummary({ className }: OrderSummaryProps) {
 						</span>
 					</div>
 
+					{voucherUsed > 0 && (
+						<div className="flex justify-between items-center text-sm mt-2">
+							<span className="text-gray-700">Valor a pagar na entrega:</span>
+							<span className="text-brand-blue font-semibold">
+								{finalTotal > 0 ? formatCurrency(finalTotal) : 'R$ 0,00'}
+							</span>
+						</div>
+					)}
+
 					<div className="mt-3 p-2 bg-gray-50 rounded-lg border border-gray-100">
 						<p className="text-xs text-center text-gray-500 flex items-center justify-center gap-1">
 							<CreditCard size={12} className="text-gray-400" />
-							Pagamento seguro processado na entrega
+							{finalTotal > 0
+								? 'Pagamento seguro processado na entrega'
+								: 'Pedido coberto integralmente pelo seu voucher'}
 						</p>
 					</div>
 				</div>

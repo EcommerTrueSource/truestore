@@ -3,6 +3,7 @@ import { TrueCore } from '@/lib/true-core-proxy';
 
 /**
  * Rota para obter informações do cliente pelo ID do Clerk
+ * Implementação compatível com Next.js 14+
  * 
  * Endpoint público: /api/customers/clerk/[id]
  * Endpoint interno: /marketing/customers/byClerkId/[id]
@@ -11,10 +12,12 @@ import { TrueCore } from '@/lib/true-core-proxy';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string | Promise<string> } }
 ) {
   try {
-    const clerkId = await params.id;
+    // Padrão oficial Next.js 14+: aguardar o objeto params antes de acessar propriedades
+    const { id } = await params;
+    const clerkId = id;
     
     if (!clerkId) {
       return Response.json(
