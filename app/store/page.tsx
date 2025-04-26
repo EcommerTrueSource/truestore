@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { tokenStore } from '@/lib/token-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CategorySidebar } from '@/components/category/category-sidebar';
+import { StoreBanner } from '@/components/banner/store-banner';
 
 // Constantes de configuração
 const PRODUCTS_PER_PAGE = 12;
@@ -1023,32 +1024,7 @@ export default function StorePage() {
 						animate={{ y: 0, opacity: 1 }}
 						transition={{ duration: 0.5 }}
 					>
-						<div className="flex items-center gap-3 mb-2">
-							<div className="h-10 w-10 rounded-full bg-brand-magenta/10 flex items-center justify-center">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									className="h-5 w-5 text-brand-magenta"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								>
-									<path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-									<line x1="3" y1="6" x2="21" y2="6"></line>
-									<path d="M16 10a4 4 0 0 1-8 0"></path>
-								</svg>
-							</div>
-							<div>
-								<h1 className="text-2xl font-bold bg-gradient-to-r from-brand-magenta to-brand-orange bg-clip-text text-transparent">
-									Nossa Loja
-								</h1>
-								<p className="text-gray-500 text-sm">
-									Encontre os produtos exclusivos selecionados para você
-								</p>
-							</div>
-						</div>
+						<StoreBanner className="mb-2" />
 					</motion.div>
 
 					{/* Search and filter area */}

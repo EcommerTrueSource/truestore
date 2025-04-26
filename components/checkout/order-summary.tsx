@@ -184,9 +184,7 @@ export function OrderSummary({ className }: OrderSummaryProps) {
 					{voucherUsed > 0 && (
 						<div className="flex justify-between items-center text-sm mt-2">
 							<span className="text-gray-700">Valor a pagar na entrega:</span>
-							<span className="text-brand-blue font-semibold">
-								{finalTotal > 0 ? formatCurrency(finalTotal) : 'R$ 0,00'}
-							</span>
+							<span className="text-brand-blue font-semibold">R$ 0,00</span>
 						</div>
 					)}
 

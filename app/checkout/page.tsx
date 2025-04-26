@@ -37,6 +37,11 @@ import {
 	ChevronUp,
 	AlertCircle,
 	Trash,
+	AlertTriangle,
+	Calendar,
+	DollarSign,
+	ShieldAlert,
+	Store,
 } from 'lucide-react';
 import { useCart } from '../../lib/contexts/cart-context';
 import { CartItem } from '../../components/checkout/cart-item';
@@ -65,6 +70,13 @@ export default function CheckoutPage() {
 	const { toast } = useToast();
 	const [openAlertDialog, setOpenAlertDialog] = useState(false);
 	const [openExitDialog, setOpenExitDialog] = useState(false);
+	const [openErrorDialog, setOpenErrorDialog] = useState(false);
+	const [errorDetails, setErrorDetails] = useState<{
+		title: string;
+		message: string;
+		type: 'limit' | 'balance' | 'general';
+		details?: any;
+	} | null>(null);
 
 	// Dados do formulário
 	const [name, setName] = useState('');
@@ -335,19 +347,48 @@ export default function CheckoutPage() {
 			}
 
 			if (!response.ok) {
-				const errorMessage = responseData?.error || 'Erro desconhecido';
-				const errorDetails = responseData?.details
-					? typeof responseData.details === 'string'
-						? responseData.details
-						: JSON.stringify(responseData.details)
-					: '';
+				console.error('Erro no processamento do pedido:', responseData);
 
-				console.error(
-					'Erro no processamento do pedido:',
-					errorMessage,
-					errorDetails
-				);
-				throw new Error(`Erro: ${errorMessage} ${errorDetails}`);
+				// Identificar o tipo de erro para exibir a mensagem apropriada
+				if (responseData.error === 'Limite de pedidos atingido') {
+					setErrorDetails({
+						title: 'Limite de Pedidos Atingido',
+						message:
+							responseData.details?.message ||
+							'Você atingiu o limite de pedidos para o período atual.',
+						type: 'limit',
+						details: responseData.details,
+					});
+					setOpenErrorDialog(true);
+				} else if (responseData.error === 'Saldo insuficiente') {
+					setErrorDetails({
+						title: 'Saldo Insuficiente',
+						message:
+							responseData.details?.message ||
+							'Você não possui saldo suficiente para realizar este pedido.',
+						type: 'balance',
+						details: responseData.details,
+					});
+					setOpenErrorDialog(true);
+				} else {
+					// Para outros tipos de erro
+					let errorMessage = 'Ocorreu um erro ao processar seu pedido.';
+					if (responseData.details?.friendlyMessage) {
+						errorMessage = responseData.details.friendlyMessage;
+					} else if (responseData.details?.message) {
+						errorMessage = responseData.details.message;
+					}
+
+					setErrorDetails({
+						title: 'Erro ao Processar Pedido',
+						message: errorMessage,
+						type: 'general',
+						details: responseData.details,
+					});
+					setOpenErrorDialog(true);
+				}
+
+				return;
 			}
 
 			// Pedido processado com sucesso
@@ -367,14 +408,15 @@ export default function CheckoutPage() {
 		} catch (error) {
 			console.error('Erro ao processar pedido:', error);
 
-			toast({
-				title: 'Erro ao processar pedido',
-				description:
+			setErrorDetails({
+				title: 'Erro ao Processar Pedido',
+				message:
 					error instanceof Error
 						? error.message
 						: 'Ocorreu um erro ao finalizar seu pedido. Tente novamente.',
-				variant: 'destructive',
+				type: 'general',
 			});
+			setOpenErrorDialog(true);
 		} finally {
 			setIsSubmitting(false);
 			setIsConfirmationOpen(false);
@@ -1074,33 +1116,29 @@ export default function CheckoutPage() {
 
 												<div className="flex justify-between items-center text-sm mt-1">
 													<span className="text-gray-500">Frete:</span>
-													<span>Grátis</span>
+													<span className="text-green-600 font-medium">
+														Grátis
+													</span>
 												</div>
 												<div className="flex justify-between font-medium text-base mt-3">
 													<span>Total</span>
 													<span className="text-brand-magenta">
-														{formatCurrency(totalPrice)}
+														{formatCurrency(
+															Math.max(
+																0,
+																totalPrice -
+																	Math.min(getAvailableBalance(), totalPrice)
+															)
+														)}
 													</span>
 												</div>
 
-												{getAvailableBalance() > 0 && (
-													<div className="flex justify-between items-center text-sm mt-2">
-														<span className="text-gray-700">
-															Valor a pagar na entrega:
-														</span>
-														<span className="font-semibold">
-															{Math.max(0, totalPrice - getAvailableBalance()) >
-															0
-																? formatCurrency(
-																		Math.max(
-																			0,
-																			totalPrice - getAvailableBalance()
-																		)
-																  )
-																: 'R$ 0,00'}
-														</span>
-													</div>
-												)}
+												<div className="flex justify-between items-center text-sm mt-2">
+													<span className="text-gray-700">
+														Valor a pagar na entrega:
+													</span>
+													<span className="font-semibold">R$ 0,00</span>
+												</div>
 											</div>
 										</div>
 
@@ -1208,6 +1246,126 @@ export default function CheckoutPage() {
 					</div>
 				</div>
 			</div>
+
+			{/* Diálogo de Erro */}
+			<AlertDialog open={openErrorDialog} onOpenChange={setOpenErrorDialog}>
+				<AlertDialogContent className="max-w-lg">
+					<AlertDialogHeader>
+						<AlertDialogTitle
+							className={`text-xl flex items-center gap-2 ${
+								errorDetails?.type === 'limit'
+									? 'text-amber-600'
+									: errorDetails?.type === 'balance'
+									? 'text-red-600'
+									: 'text-gray-900'
+							}`}
+						>
+							{errorDetails?.type === 'limit' && (
+								<Calendar className="h-5 w-5" />
+							)}
+							{errorDetails?.type === 'balance' && (
+								<DollarSign className="h-5 w-5" />
+							)}
+							{errorDetails?.type === 'general' && (
+								<ShieldAlert className="h-5 w-5" />
+							)}
+							{errorDetails?.title}
+						</AlertDialogTitle>
+						<AlertDialogDescription className="text-base mt-2 text-gray-700">
+							{errorDetails?.message}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+
+					{errorDetails?.type === 'limit' && errorDetails.details && (
+						<div className="my-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+							<h4 className="font-medium text-amber-800 mb-2 flex items-center gap-2">
+								<Calendar className="h-4 w-4" />
+								Informações de Limite
+							</h4>
+							<div className="space-y-2 text-sm text-amber-700">
+								<p>
+									Você já realizou <strong>{errorDetails.details.used}</strong>{' '}
+									de <strong>{errorDetails.details.limit}</strong> pedidos
+									permitidos.
+								</p>
+								<p>
+									Período atual:{' '}
+									<strong>
+										{new Date(
+											errorDetails.details.period?.start
+										).toLocaleDateString()}
+									</strong>{' '}
+									até{' '}
+									<strong>
+										{new Date(
+											errorDetails.details.period?.end
+										).toLocaleDateString()}
+									</strong>
+								</p>
+								<p className="text-amber-900 font-medium mt-3">
+									Seu limite será renovado após o término deste período.
+								</p>
+							</div>
+						</div>
+					)}
+
+					{errorDetails?.type === 'balance' && errorDetails.details && (
+						<div className="my-4 p-4 bg-red-50 rounded-lg border border-red-200">
+							<h4 className="font-medium text-red-800 mb-2 flex items-center gap-2">
+								<DollarSign className="h-4 w-4" />
+								Informações de Saldo
+							</h4>
+							<div className="space-y-2 text-sm text-red-700">
+								<p>
+									Valor do pedido:{' '}
+									<strong>{formatCurrency(Number(totalPrice))}</strong>
+								</p>
+								<p>
+									Saldo disponível:{' '}
+									<strong>
+										{formatCurrency(Number(errorDetails.details.remaining))}
+									</strong>
+								</p>
+								{errorDetails.details.period && (
+									<p>
+										Período:{' '}
+										<strong>
+											{new Date(
+												errorDetails.details.period?.start
+											).toLocaleDateString()}
+										</strong>{' '}
+										até{' '}
+										<strong>
+											{new Date(
+												errorDetails.details.period?.end
+											).toLocaleDateString()}
+										</strong>
+									</p>
+								)}
+							</div>
+
+							<div className="mt-4 pt-3 border-t border-red-200">
+								<p className="text-sm text-red-800 flex items-center gap-2">
+									<Store className="h-4 w-4" />
+									<span>
+										Para realizar este pedido, considere remover itens do
+										carrinho para reduzir o valor total.
+									</span>
+								</p>
+							</div>
+						</div>
+					)}
+
+					<AlertDialogFooter className="mt-4">
+						<Button
+							onClick={() => setOpenErrorDialog(false)}
+							className="w-full bg-gradient-to-r from-brand-magenta to-brand-orange text-white"
+						>
+							Entendi, vou revisar meu pedido
+						</Button>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</StoreLayout>
 	);
 }
