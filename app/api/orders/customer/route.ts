@@ -92,6 +92,21 @@ export async function GET(request: NextRequest) {
     
     if (!ordersResponse.ok) {
       console.error(`[CustomerOrders API] Erro ao obter pedidos: ${ordersResponse.status}`);
+      
+      // Obter o texto da resposta para diagnóstico
+      try {
+        const responseText = await ordersResponse.text();
+        console.error(`[CustomerOrders API] Resposta de erro: ${responseText.substring(0, 200)}...`);
+        
+        // Se a resposta parece ser HTML (começa com <!DOCTYPE ou <html), é provável que a URL esteja incorreta
+        if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+          console.error('[CustomerOrders API] A resposta parece ser HTML, verificando URL da API');
+          console.error(`[CustomerOrders API] URL utilizada: ${ordersUrl}`);
+        }
+      } catch (e) {
+        console.error('[CustomerOrders API] Não foi possível obter texto da resposta de erro');
+      }
+      
       return NextResponse.json(
         { error: 'Erro ao obter pedidos do cliente' },
         { status: 500 }
