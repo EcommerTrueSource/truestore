@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TrueCore } from '@/lib/true-core-proxy';
+import { cookies } from 'next/headers';
 
 /**
  * Endpoint para buscar o histórico de pedidos do cliente autenticado
@@ -19,18 +20,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Extrair o clerkId do token JWT para identificar o cliente
-    const clerkId = await TrueCore.extractClerkIdFromToken(token);
-    
-    if (!clerkId) {
-      console.error('[Orders History API] Não foi possível extrair o clerkId do token');
-      return NextResponse.json(
-        { error: 'Usuário não identificado' },
-        { status: 400 }
-      );
-    }
-
-    console.log(`[Orders History API] Busca para clerkId: ${clerkId}`);
+    console.log('[Orders History API] Token obtido com sucesso');
     
     // Obter a URL base da API True Core
     const baseUrl = TrueCore.getApiUrl();
@@ -43,34 +33,60 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Primeiro, buscar o ID interno do cliente baseado no clerkId
-    console.log(`[Orders History API] Buscando dados do cliente com Clerk ID: ${clerkId}`);
-    const customerEndpoint = `/marketing/customers/byClerkId/${clerkId}`;
-    const customerUrl = `${baseUrl}${customerEndpoint}`;
+    // Etapa 1: Obter o ID do cliente do usuário autenticado
+    // Extrair clerkId da sessão do Clerk
+    let clerkId = null;
     
-    // Fazer a requisição para a API True Core
-    const customerResponse = await fetch(customerUrl, {
-      method: 'GET',
+    // Obter da sessão do Clerk
+    const sessionCookie = request.cookies.get('__session')?.value;
+    
+    if (sessionCookie) {
+      try {
+        // Decode session JWT payload
+        const payload = JSON.parse(
+          Buffer.from(sessionCookie.split('.')[1], 'base64').toString()
+        );
+        clerkId = payload.sub; // 'sub' contém o ID do usuário no Clerk
+        console.log(`[Orders History API] ClerkId extraído do cookie de sessão: ${clerkId}`);
+      } catch (error) {
+        console.error('[Orders History API] Erro ao extrair clerkId do cookie:', error);
+      }
+    }
+    
+    if (!clerkId) {
+      console.error('[Orders History API] Não foi possível obter o clerkId do usuário');
+      return NextResponse.json(
+        { error: 'Usuário não identificado. Faça login novamente.' },
+        { status: 401 }
+      );
+    }
+    
+    // Etapa 2: Buscar os dados do cliente usando nosso próprio endpoint
+    console.log(`[Orders History API] Buscando cliente via API interna: /api/customers/clerk/${clerkId}`);
+    
+    // Usar o hostname da requisição original para manter o mesmo domínio
+    const host = request.headers.get('host') || 'localhost:3000';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    
+    const customerResponse = await fetch(`${protocol}://${host}/api/customers/clerk/${clerkId}`, {
       headers: {
-        'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'Cookie': request.headers.get('cookie') || '',
         'Authorization': `Bearer ${token}`
       }
     });
     
     if (!customerResponse.ok) {
-      console.error(`[Orders History API] Erro ao obter dados do cliente: ${customerResponse.status}`);
+      console.error(`[Orders History API] Erro ao buscar cliente: ${customerResponse.status}`);
       return NextResponse.json(
-        { error: 'Erro ao obter dados do cliente na API externa' },
+        { error: 'Erro ao buscar dados do cliente' },
         { status: customerResponse.status }
       );
     }
     
-    // Extrair os dados do cliente da resposta
     const customerData = await customerResponse.json();
-    const customerId = customerData.id;
     
-    if (!customerId) {
+    if (!customerData.id) {
       console.error('[Orders History API] ID do cliente não encontrado na resposta');
       return NextResponse.json(
         { error: 'Cliente não encontrado ou sem ID válido' },
@@ -78,13 +94,14 @@ export async function GET(request: NextRequest) {
       );
     }
     
+    const customerId = customerData.id;
     console.log(`[Orders History API] ID do cliente encontrado: ${customerId}`);
     
-    // Agora, buscar os pedidos do cliente
+    // Etapa 3: Buscar os pedidos do cliente
     const ordersEndpoint = `/marketing/orders/customer/${customerId}`;
     const ordersUrl = `${baseUrl}${ordersEndpoint}`;
     
-    console.log(`[Orders History API] Buscando pedidos na URL: ${ordersUrl}`);
+    console.log(`[Orders History API] Buscando pedidos em: ${ordersUrl}`);
     
     const ordersResponse = await fetch(ordersUrl, {
       method: 'GET',
@@ -95,10 +112,29 @@ export async function GET(request: NextRequest) {
       }
     });
     
+    console.log(`[Orders History API] Status da resposta de pedidos: ${ordersResponse.status}`);
+    
     if (!ordersResponse.ok) {
-      console.error(`[Orders History API] Erro ao buscar pedidos: ${ordersResponse.status}`);
+      const status = ordersResponse.status;
+      let errorMessage = `Erro ao buscar histórico de pedidos: ${status}`;
+      
+      try {
+        const errorText = await ordersResponse.text();
+        console.error(`[Orders History API] Erro ao buscar pedidos: ${status}`);
+        console.error(`[Orders History API] Resposta: ${errorText.substring(0, 200)}`);
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorMessage;
+        } catch (e) {
+          // Não é JSON, usar texto bruto
+        }
+      } catch (e) {
+        console.error('[Orders History API] Erro ao processar resposta de erro:', e);
+      }
+      
       return NextResponse.json(
-        { error: 'Erro ao buscar histórico de pedidos' },
+        { error: errorMessage },
         { status: ordersResponse.status }
       );
     }
@@ -106,6 +142,10 @@ export async function GET(request: NextRequest) {
     // Processar e retornar os dados dos pedidos
     const ordersData = await ordersResponse.json();
     console.log(`[Orders History API] Encontrados ${ordersData.length} pedidos para o cliente ${customerId}`);
+    
+    if (Array.isArray(ordersData)) {
+      console.log(`[Orders History API] IDs dos pedidos: ${ordersData.map(o => o.id.substring(0, 8)).join(', ')}`);
+    }
     
     return NextResponse.json({
       success: true,
