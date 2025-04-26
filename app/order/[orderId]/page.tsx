@@ -382,12 +382,6 @@ export default function OrderDetailsPage() {
 										</h3>
 										<div className="bg-gray-50 rounded-lg p-3">
 											<div className="flex justify-between text-sm">
-												<span className="text-gray-600">Método</span>
-												<span className="text-gray-900 font-medium capitalize">
-													{order.paymentMethod.replace('_', ' ')}
-												</span>
-											</div>
-											<div className="flex justify-between text-sm mt-2">
 												<span className="text-gray-600">Status</span>
 												<span className="text-gray-900 font-medium capitalize">
 													{order.paymentStatus.replace('_', ' ')}

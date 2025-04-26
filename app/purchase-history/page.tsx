@@ -111,34 +111,34 @@ export default function PurchaseHistoryPage() {
 					onValueChange={setActiveTab}
 					className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6"
 				>
-					<TabsList className="grid grid-cols-5 mb-4">
+					<TabsList className="flex flex-nowrap md:grid md:grid-cols-5 gap-1 mb-4 overflow-x-auto pb-1 px-1 -mx-1">
 						<TabsTrigger
 							value="all"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
+							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
 						>
 							Todos
 						</TabsTrigger>
 						<TabsTrigger
 							value="processing"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
+							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
 						>
 							Em Processamento
 						</TabsTrigger>
 						<TabsTrigger
 							value="shipped"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
+							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
 						>
 							Enviados
 						</TabsTrigger>
 						<TabsTrigger
 							value="delivered"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
+							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
 						>
 							Entregues
 						</TabsTrigger>
 						<TabsTrigger
 							value="canceled"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
+							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
 						>
 							Cancelados
 						</TabsTrigger>
