@@ -103,6 +103,12 @@ export function CustomerProvider({ children }: { children: ReactNode }) {
 	 * Obtém o saldo disponível do cliente baseado no valor do ticket e frequência
 	 */
 	const getAvailableBalance = (): number => {
+		// Se temos os limites e valor do ticket, usar o saldo remaining
+		if (orderLimits?.limits?.ticketValue?.remaining !== undefined) {
+			return orderLimits.limits.ticketValue.remaining;
+		}
+
+		// Fallback para o valor do ticket da categoria (limite total)
 		if (!customer?.__category__) {
 			return 0;
 		}

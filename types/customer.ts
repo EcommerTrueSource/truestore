@@ -61,14 +61,29 @@ export interface CustomerValueLimit {
 }
 
 export interface CustomerOrderLimits {
-  customerId: string;
-  dailyOrderLimit: number;
-  weeklyOrderLimit: number;
-  monthlyOrderLimit: number;
-  minimumOrderValue: number;
-  maximumOrderValue: number;
-  remainingDailyLimit: number;
-  remainingWeeklyLimit: number;
-  remainingMonthlyLimit: number;
-  lastUpdated: string;
+  customer: {
+    id: string;
+    name: string;
+    hasCategory: boolean;
+    category?: {
+      id: string;
+      name: string;
+    };
+  };
+  limits: {
+    frequencyPerMonth: {
+      limit: number;
+      used: number;
+      remaining: number;
+      hasLimit: boolean;
+      period: CustomerLimitPeriod;
+    };
+    ticketValue: {
+      limit: string;
+      used: number;
+      remaining: number;
+      hasLimit: boolean;
+      period: CustomerLimitPeriod;
+    };
+  };
 }
