@@ -96,7 +96,7 @@ export default function PurchaseHistoryPage() {
 						</div>
 						<div>
 							<h1 className="text-2xl font-bold bg-gradient-to-r from-brand-magenta to-brand-orange bg-clip-text text-transparent">
-								Histórico de Compras
+								Histórico de Pedidos
 							</h1>
 							<p className="text-gray-500 text-sm">
 								Acompanhe e gerencie seus pedidos anteriores
