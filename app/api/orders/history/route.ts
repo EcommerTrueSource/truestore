@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TrueCore } from '@/lib/true-core-proxy';
-import { cookies } from 'next/headers';
 
 /**
  * Endpoint para buscar o histórico de pedidos do cliente autenticado
@@ -61,33 +60,42 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Etapa 2: Buscar os dados do cliente usando nosso próprio endpoint
-    console.log(`[Orders History API] Buscando cliente via API interna: /api/customers/clerk/${clerkId}`);
+    // Etapa 2: Buscar os dados do cliente DIRETAMENTE da API True Core
+    console.log(`[Orders History API] Buscando cliente diretamente da API True Core com clerkId: ${clerkId}`);
     
-    // Usar o hostname da requisição original para manter o mesmo domínio
-    const host = request.headers.get('host') || 'localhost:3000';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const customerEndpoint = `/marketing/customers/byClerkId/${clerkId}`;
+    const customerUrl = `${baseUrl}${customerEndpoint}`;
     
-    const customerResponse = await fetch(`${protocol}://${host}/api/customers/clerk/${clerkId}`, {
+    console.log(`[Orders History API] URL de busca do cliente: ${customerUrl}`);
+    
+    const customerResponse = await fetch(customerUrl, {
+      method: 'GET',
       headers: {
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Cookie': request.headers.get('cookie') || '',
         'Authorization': `Bearer ${token}`
       }
     });
     
+    console.log(`[Orders History API] Status da resposta cliente: ${customerResponse.status}`);
+    
     if (!customerResponse.ok) {
       console.error(`[Orders History API] Erro ao buscar cliente: ${customerResponse.status}`);
+      const errorText = await customerResponse.text();
+      console.error(`[Orders History API] Detalhes do erro: ${errorText.substring(0, 200)}`);
+      
       return NextResponse.json(
         { error: 'Erro ao buscar dados do cliente' },
         { status: customerResponse.status }
       );
     }
     
+    // Extrair os dados do cliente
     const customerData = await customerResponse.json();
     
     if (!customerData.id) {
       console.error('[Orders History API] ID do cliente não encontrado na resposta');
+      console.error(`[Orders History API] Resposta recebida: ${JSON.stringify(customerData).substring(0, 200)}`);
       return NextResponse.json(
         { error: 'Cliente não encontrado ou sem ID válido' },
         { status: 404 }
@@ -144,13 +152,34 @@ export async function GET(request: NextRequest) {
     console.log(`[Orders History API] Encontrados ${ordersData.length} pedidos para o cliente ${customerId}`);
     
     if (Array.isArray(ordersData)) {
-      console.log(`[Orders History API] IDs dos pedidos: ${ordersData.map(o => o.id.substring(0, 8)).join(', ')}`);
+      // Filtrar dados sensíveis dos pedidos antes de retornar
+      const filteredOrders = ordersData.map(order => {
+        // Se o pedido tem dados do cliente, filtrar apenas para manter dados não sensíveis
+        if (order.__customer__) {
+          order.__customer__ = {
+            id: order.__customer__.id,
+            name: order.__customer__.name,
+            email: order.__customer__.email,
+            // Remover dados sensíveis como endereço completo, documento, telefone, etc.
+          };
+        }
+        return order;
+      });
+      
+      console.log(`[Orders History API] Dados filtrados para remover informações sensíveis`);
+      console.log(`[Orders History API] IDs dos pedidos: ${filteredOrders.map(o => o.id.substring(0, 8)).join(', ')}`);
+      
+      return NextResponse.json({
+        success: true,
+        orders: filteredOrders
+      });
+    } else {
+      console.error('[Orders History API] Resposta de pedidos não é um array');
+      return NextResponse.json({
+        success: true,
+        orders: []
+      });
     }
-    
-    return NextResponse.json({
-      success: true,
-      orders: ordersData
-    });
     
   } catch (error) {
     console.error('[Orders History API] Erro ao processar requisição:', error);
