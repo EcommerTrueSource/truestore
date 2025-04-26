@@ -1366,3 +1366,49 @@ export async function searchWarehouseProducts({
     throw error;
   }
 }
+
+/**
+ * Busca os pedidos do cliente atual
+ * @returns Um array com os pedidos do cliente
+ */
+export async function getCustomerOrders() {
+  try {
+    console.log('[API] Buscando pedidos do cliente');
+    
+    // Verificar se temos token
+    if (!tokenStore.hasValidToken()) {
+      throw new Error('Token não encontrado ou inválido');
+    }
+    
+    // Obter token para a requisição
+    const token = tokenStore.getToken();
+    
+    // Obter o ID do Clerk do localStorage (se disponível)
+    const clerkId = localStorage.getItem('clerk_user_id');
+    const queryParams = clerkId ? `?clerkId=${clerkId}` : '';
+    
+    // Fazer a requisição para a API
+    const response = await fetch(`/api/orders/customer${queryParams}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar pedidos: ${response.status}`);
+    }
+    
+    // Analisar a resposta como JSON
+    const orders = await response.json();
+    console.log(`[API] ${orders.length} pedidos encontrados`);
+    
+    return orders;
+  } catch (error) {
+    console.error('[API] Erro ao buscar pedidos do cliente:', error);
+    throw error;
+  }
+}
