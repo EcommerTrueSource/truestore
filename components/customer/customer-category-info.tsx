@@ -17,10 +17,12 @@ import {
 	RefreshCcw,
 	Award,
 	Calendar,
+	Clock,
 } from 'lucide-react';
 
 export default function CustomerCategoryInfo() {
-	const { customer, isLoading, getAvailableBalance } = useCustomer();
+	const { customer, isLoading, getAvailableBalance, orderLimits } =
+		useCustomer();
 
 	if (isLoading) {
 		return (
@@ -76,6 +78,21 @@ export default function CustomerCategoryInfo() {
 		currency: 'BRL',
 	});
 
+	// Formatação de data para DD/MM/YYYY
+	const formatDate = (dateString: string) => {
+		if (!dateString) return '';
+		const date = new Date(dateString);
+		const day = String(date.getDate()).padStart(2, '0');
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const year = date.getFullYear();
+		return `${day}/${month}/${year}`;
+	};
+
+	// Obter a data da próxima renovação
+	const nextRenewalDate = orderLimits?.limits?.ticketValue?.period?.end
+		? formatDate(orderLimits.limits.ticketValue.period.end)
+		: '';
+
 	return (
 		<motion.div
 			initial={{ opacity: 0, y: 20 }}
@@ -118,10 +135,18 @@ export default function CustomerCategoryInfo() {
 							{formatter.format(availableBalance)}
 						</div>
 
-						<div className="mt-2 text-xs text-brand-blue/70 flex items-center gap-1">
-							<Calendar className="h-3 w-3 text-brand-blue/70" />
-							Renovação a cada{' '}
-							{frequencyPerMonth === 1 ? 'mês' : `${frequencyPerMonth} meses`}
+						<div className="mt-2 text-xs text-brand-blue/70 flex flex-col gap-1">
+							<div className="flex items-center gap-1">
+								<Calendar className="h-3 w-3 text-brand-blue/70" />
+								Renovação a cada{' '}
+								{frequencyPerMonth === 1 ? 'mês' : `${frequencyPerMonth} meses`}
+							</div>
+							{nextRenewalDate && (
+								<div className="flex items-center gap-1">
+									<Clock className="h-3 w-3 text-brand-blue/70" />
+									Próxima renovação: {nextRenewalDate}
+								</div>
+							)}
 						</div>
 					</div>
 
