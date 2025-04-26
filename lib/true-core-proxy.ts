@@ -19,24 +19,20 @@ export const TrueCore = {
   },
 
   /**
-   * Obtém a URL base da API True Core a partir das variáveis de ambiente
+   * Obtém a URL base da API True Core
    */
   getApiUrl(): string | null {
-    // Primeiro verificar a variável de ambiente no servidor
-    const serverUrl = process.env.TRUE_CORE_PANEL_URL ? `${process.env.TRUE_CORE_PANEL_URL}/api` : null;
-    if (serverUrl) {
-      return serverUrl;
+    // Obter a URL da API das variáveis de ambiente
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    
+    if (!apiUrl) {
+      console.error('[TrueCore] ERRO: URL da API True Core não configurada nas variáveis de ambiente');
+      console.error('[TrueCore] Verifique se NEXT_PUBLIC_API_URL está definida no arquivo .env.local');
+      return null;
     }
     
-    // Depois verificar a variável pública (acessível no cliente)
-    const publicUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (publicUrl) {
-      return publicUrl;
-    }
-    
-    // Se não encontrou nenhuma variável de ambiente configurada
-    console.error('[TrueCore] Variáveis de ambiente não configuradas (TRUE_CORE_PANEL_URL ou NEXT_PUBLIC_API_URL)');
-    return null;
+    // Remover sufixo /api se presente
+    return apiUrl.replace('/api', '');
   },
 
   /**

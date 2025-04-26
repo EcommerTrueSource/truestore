@@ -17,11 +17,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency } from '@/lib/utils';
-import { getCustomerOrders } from '@/lib/api';
 
 // Interfaces para tipagem
 interface OrderItem {
-	id: string;
+	id: number;
 	name: string;
 	price: number;
 	quantity: number;
@@ -31,33 +30,15 @@ interface OrderItem {
 interface Order {
 	id: string;
 	date: string;
-	status: 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELED';
-	total: string;
+	status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'canceled';
+	total: number;
 	items: OrderItem[];
 }
-
-// Mapeamento para normalizar o status dos pedidos
-const normalizeStatus = (
-	status: string
-): 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELED' => {
-	// Converter para minúsculas para uma comparação insensível a maiúsculas
-	const normalizedStatus = status.toLowerCase();
-
-	if (normalizedStatus.includes('pend')) return 'PENDING';
-	if (normalizedStatus.includes('process')) return 'PROCESSING';
-	if (normalizedStatus.includes('ship')) return 'SHIPPED';
-	if (normalizedStatus.includes('deliver')) return 'DELIVERED';
-	if (normalizedStatus.includes('cancel')) return 'CANCELED';
-
-	// Valor padrão
-	return 'PENDING';
-};
 
 export default function PurchaseHistoryPage() {
 	const router = useRouter();
 	const [orders, setOrders] = useState<Order[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState('all');
 
 	// Textos e cores para cada status
@@ -72,57 +53,80 @@ export default function PurchaseHistoryPage() {
 		canceled: { label: 'Cancelado', color: 'bg-red-100 text-red-800' },
 	};
 
-	// Carregar os pedidos do cliente
 	useEffect(() => {
+		// Simular carregamento de pedidos
 		const loadOrders = async () => {
 			setIsLoading(true);
-			setError(null);
-
 			try {
-				// Buscar os pedidos da API
-				const ordersData = await getCustomerOrders();
+				// Simulação de dados de pedidos
+				await new Promise((resolve) => setTimeout(resolve, 1000));
 
-				// Verificar se temos pedidos
-				if (!ordersData || !Array.isArray(ordersData)) {
-					console.error('Resposta da API não contém dados de pedidos válidos');
-					setOrders([]);
-					return;
-				}
+				const mockOrders: Order[] = [
+					{
+						id: 'P123456',
+						date: '2023-10-12T14:30:00Z',
+						status: 'delivered',
+						total: 259.7,
+						items: [
+							{
+								id: 1,
+								name: 'Base Líquida Ultra HD',
+								price: 89.9,
+								quantity: 2,
+								imageUrl:
+									'https://images.unsplash.com/photo-1596704017254-9a89b5d155cc?auto=format&fit=crop&w=800&q=80',
+							},
+							{
+								id: 2,
+								name: 'Sérum Facial Vitamina C',
+								price: 79.9,
+								quantity: 1,
+								imageUrl:
+									'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80',
+							},
+						],
+					},
+					{
+						id: 'P789012',
+						date: '2023-11-05T10:15:00Z',
+						status: 'shipped',
+						total: 134.8,
+						items: [
+							{
+								id: 3,
+								name: 'Paleta de Sombras Sunset',
+								price: 79.9,
+								quantity: 1,
+								imageUrl:
+									'https://images.unsplash.com/photo-1596704017390-8a43a4c580e4?auto=format&fit=crop&w=800&q=80',
+							},
+							{
+								id: 4,
+								name: 'Máscara Facial Hidratante',
+								price: 54.9,
+								quantity: 1,
+							},
+						],
+					},
+					{
+						id: 'P345678',
+						date: '2023-12-18T16:45:00Z',
+						status: 'processing',
+						total: 175.6,
+						items: [
+							{
+								id: 5,
+								name: 'Kit Pincéis Profissionais',
+								price: 175.6,
+								quantity: 1,
+							},
+						],
+					},
+				];
 
-				// Transformar os dados da API no formato correto para o frontend
-				const formattedOrders: Order[] = ordersData.map((apiOrder: any) => {
-					// Mapear os itens do pedido
-					const items = Array.isArray(apiOrder.__items__)
-						? apiOrder.__items__.map((item: any) => ({
-								id: item.id,
-								name: item.__product__?.name || 'Produto não identificado',
-								price: parseFloat(item.price),
-								quantity: item.quantity,
-								imageUrl: item.__product__?.images?.[0] || undefined,
-						  }))
-						: [];
-
-					return {
-						id: apiOrder.tinyId || apiOrder.id,
-						date: apiOrder.createdAt || new Date().toISOString(),
-						status: normalizeStatus(apiOrder.status),
-						total: apiOrder.total,
-						items,
-					};
-				});
-
-				// Ordenar por data mais recente primeiro
-				formattedOrders.sort(
-					(a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-				);
-
-				setOrders(formattedOrders);
-				console.log(`Carregados ${formattedOrders.length} pedidos`);
+				setOrders(mockOrders);
 			} catch (error) {
 				console.error('Erro ao carregar histórico de compras:', error);
-				setError(
-					'Não foi possível carregar seu histórico de compras. Por favor, tente novamente mais tarde.'
-				);
 			} finally {
 				setIsLoading(false);
 			}
@@ -227,23 +231,6 @@ export default function PurchaseHistoryPage() {
 									</Card>
 								))}
 							</div>
-						) : error ? (
-							// Estado de erro
-							<div className="text-center py-16">
-								<div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-red-100 mb-6">
-									<AlertCircle className="h-10 w-10 text-red-400" />
-								</div>
-								<h2 className="mt-4 text-xl font-medium text-gray-900">
-									Erro ao carregar pedidos
-								</h2>
-								<p className="mt-2 text-gray-500 max-w-md mx-auto">{error}</p>
-								<Button
-									onClick={() => window.location.reload()}
-									className="mt-6 bg-brand-magenta hover:bg-brand-magenta/90"
-								>
-									Tentar novamente
-								</Button>
-							</div>
 						) : filteredOrders.length > 0 ? (
 							// Lista de pedidos
 							<div className="space-y-4">
@@ -260,18 +247,8 @@ export default function PurchaseHistoryPage() {
 														<div className="font-medium">
 															Pedido #{order.id}
 														</div>
-														<Badge
-															className={
-																statusConfig[
-																	order.status.toLowerCase() as keyof typeof statusConfig
-																].color
-															}
-														>
-															{
-																statusConfig[
-																	order.status.toLowerCase() as keyof typeof statusConfig
-																].label
-															}
+														<Badge className={statusConfig[order.status].color}>
+															{statusConfig[order.status].label}
 														</Badge>
 													</div>
 
@@ -325,7 +302,7 @@ export default function PurchaseHistoryPage() {
 															Valor total
 														</p>
 														<p className="text-lg font-bold text-brand-magenta mb-4">
-															{formatCurrency(parseFloat(order.total))}
+															{formatCurrency(order.total)}
 														</p>
 
 														<div className="text-sm text-gray-500">
