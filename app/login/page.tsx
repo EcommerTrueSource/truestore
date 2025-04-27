@@ -22,6 +22,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { OAuthStrategy } from '@clerk/types';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { authService } from '@/lib/services/auth-service';
+import { PasswordRecoveryDialog } from '@/components/auth/password-recovery-dialog';
 
 export default function LoginPage() {
 	const router = useRouter();
@@ -36,6 +37,7 @@ export default function LoginPage() {
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState('');
 	const [mounted, setMounted] = useState(false);
+	const [recoveryOpen, setRecoveryOpen] = useState(false);
 
 	// Redirecionar para a loja se o usuário já estiver autenticado
 	useEffect(() => {
@@ -484,29 +486,19 @@ export default function LoginPage() {
 								<Label htmlFor="password" className="text-gray-700">
 									Senha
 								</Label>
-								<Link
-									href="#"
+								<button
+									type="button"
 									className="text-sm text-brand-magenta hover:text-brand-magenta/90 font-medium transition-colors duration-200"
-									onClick={(e) => {
-										e.preventDefault();
-										if (isLoaded && email) {
-											signIn.create({
-												strategy: 'reset_password_email_code',
-												identifier: email,
-											});
-											toast({
-												title: 'Email enviado',
-												description:
-													'Verifique sua caixa de entrada para redefinir sua senha',
-												variant: 'default',
-											});
-										} else {
+									onClick={() => {
+										if (!email) {
 											setError('Informe seu email para redefinir a senha');
+											return;
 										}
+										setRecoveryOpen(true);
 									}}
 								>
 									Esqueceu?
-								</Link>
+								</button>
 							</div>
 							<div className="relative group">
 								<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -647,6 +639,13 @@ export default function LoginPage() {
 					</form>
 				</motion.div>
 			</div>
+
+			{/* Modal de recuperação de senha */}
+			<PasswordRecoveryDialog
+				open={recoveryOpen}
+				onOpenChange={setRecoveryOpen}
+				initialEmail={email}
+			/>
 		</div>
 	);
 }

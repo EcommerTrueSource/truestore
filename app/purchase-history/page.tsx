@@ -14,6 +14,10 @@ import {
 	AlertCircle,
 	Clock,
 	Loader2,
+	Truck,
+	CheckCircle,
+	XCircle,
+	FileText,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,6 +31,7 @@ import {
 	orderStatusConfig,
 } from '@/types/order';
 import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function PurchaseHistoryPage() {
 	const router = useRouter();
@@ -35,6 +40,39 @@ export default function PurchaseHistoryPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState('all');
 	const { toast } = useToast();
+
+	const tabConfig = [
+		{
+			id: 'all',
+			label: 'Todos os pedidos',
+			icon: <FileText className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'pending',
+			label: 'Pendentes',
+			icon: <Clock className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'processing',
+			label: 'Em processamento',
+			icon: <Package className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'shipped',
+			label: 'Enviados',
+			icon: <Truck className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'delivered',
+			label: 'Entregues',
+			icon: <CheckCircle className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'canceled',
+			label: 'Cancelados',
+			icon: <XCircle className="h-4 w-4 mr-1" />,
+		},
+	];
 
 	useEffect(() => {
 		// Carregar pedidos do cliente da API
@@ -111,37 +149,58 @@ export default function PurchaseHistoryPage() {
 					onValueChange={setActiveTab}
 					className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6"
 				>
-					<TabsList className="flex flex-nowrap md:grid md:grid-cols-5 gap-1 mb-4 overflow-x-auto pb-1 px-1 -mx-1">
-						<TabsTrigger
-							value="all"
-							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
-						>
-							Todos
-						</TabsTrigger>
-						<TabsTrigger
-							value="processing"
-							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
-						>
-							Em Processamento
-						</TabsTrigger>
-						<TabsTrigger
-							value="shipped"
-							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
-						>
-							Enviados
-						</TabsTrigger>
-						<TabsTrigger
-							value="delivered"
-							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
-						>
-							Entregues
-						</TabsTrigger>
-						<TabsTrigger
-							value="canceled"
-							className="flex-shrink-0 data-[state=active]:bg-brand-magenta data-[state=active]:text-white whitespace-nowrap"
-						>
-							Cancelados
-						</TabsTrigger>
+					{/* Versão mobile: grid de botões */}
+					<div className="md:hidden mb-4">
+						<div className="grid grid-cols-2 gap-2 mb-2">
+							{tabConfig.slice(0, 4).map((tab) => (
+								<Button
+									key={tab.id}
+									variant={activeTab === tab.id ? 'default' : 'outline'}
+									className={cn(
+										'flex items-center justify-center h-10 px-2 text-sm',
+										activeTab === tab.id
+											? 'bg-brand-magenta text-white'
+											: 'bg-white hover:bg-brand-magenta/10 hover:text-brand-magenta hover:border-brand-magenta'
+									)}
+									onClick={() => setActiveTab(tab.id)}
+								>
+									{tab.icon}
+									<span className="truncate">{tab.label}</span>
+								</Button>
+							))}
+						</div>
+						<div className="grid grid-cols-2 gap-2">
+							{tabConfig.slice(4).map((tab) => (
+								<Button
+									key={tab.id}
+									variant={activeTab === tab.id ? 'default' : 'outline'}
+									className={cn(
+										'flex items-center justify-center h-10 px-2 text-sm',
+										activeTab === tab.id
+											? 'bg-brand-magenta text-white'
+											: 'bg-white hover:bg-brand-magenta/10 hover:text-brand-magenta hover:border-brand-magenta'
+									)}
+									onClick={() => setActiveTab(tab.id)}
+								>
+									{tab.icon}
+									<span className="truncate">{tab.label}</span>
+								</Button>
+							))}
+						</div>
+					</div>
+
+					{/* Versão desktop: tabs horizontais */}
+					<TabsList className="hidden md:flex w-full mb-4 overflow-x-auto">
+						{tabConfig.map((tab) => (
+							<TabsTrigger
+								key={tab.id}
+								value={tab.id}
+								className="flex items-center whitespace-nowrap data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
+							>
+								{tab.icon}
+								{tab.label}
+							</TabsTrigger>
+						))}
 					</TabsList>
 
 					<TabsContent value={activeTab} className="mt-2">
