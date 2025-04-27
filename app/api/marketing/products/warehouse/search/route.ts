@@ -17,6 +17,8 @@ import { TrueCore } from '@/lib/true-core-proxy';
  * - page: number - Página de resultados (default: 0)
  * - limit: number - Limite de resultados por página (default: 12)
  * - term: string - Termo para busca de produtos (opcional)
+ * - sortOrder: string - Ordem de classificação dos produtos (opcional)
+ *   Valores possíveis: featured, price-asc, price-desc, name-asc, name-desc
  */
 export async function GET(request: NextRequest) {
   try {
@@ -56,6 +58,17 @@ export async function GET(request: NextRequest) {
     if (!searchParams.has('page')) searchParams.set('page', '0');
     if (!searchParams.has('limit')) searchParams.set('limit', '12');
     
+    // Processar parâmetro de ordenação
+    // A API não aceita os parâmetros sort e order, então vamos remover o sortOrder
+    // para evitar erros, mas manter o parâmetro original para possível uso futuro
+    if (searchParams.has('sortOrder')) {
+      // Remover o parâmetro sortOrder, pois a API não o reconhece atualmente
+      searchParams.delete('sortOrder');
+      
+      // NOTA: Se no futuro a API implementar suporte para ordenação,
+      // podemos voltar a enviar este parâmetro ou implementar a conversão adequada
+    }
+    
     // Tratar parâmetro especial categoryIds (array de IDs de categoria)
     if (searchParams.has('categoryIds')) {
       try {
@@ -73,9 +86,6 @@ export async function GET(request: NextRequest) {
             
             // Adicionar o primeiro ID como categoryId principal
             searchParams.set('categoryId', categoryIds[0]);
-            
-            // Se houver mais IDs, podemos adicionar como parâmetros adicionais
-            // ou implementar lógica específica para a API do True Core
           }
         }
       } catch (e) {

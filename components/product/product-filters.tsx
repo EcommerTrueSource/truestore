@@ -28,7 +28,7 @@ export function ProductFilters() {
 		setSearchQuery(currentSearchQuery);
 	}, [searchParams]);
 
-	const currentSort = searchParams.get('sort') || 'name-asc';
+	const currentSort = searchParams.get('sort') || 'featured';
 	const currentCategoryId = searchParams.get('category');
 
 	// Encontrar o nome da categoria atual a partir do ID
@@ -77,7 +77,7 @@ export function ProductFilters() {
 
 	const hasActiveFilters =
 		searchParams.has('search') ||
-		currentSort !== 'name-asc' ||
+		currentSort !== 'featured' ||
 		currentCategoryId;
 
 	return (

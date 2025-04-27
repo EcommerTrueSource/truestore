@@ -192,14 +192,14 @@ export default function PurchaseHistoryPage() {
 					{/* Versão desktop: tabs horizontais */}
 					<TabsList className="hidden md:flex w-full mb-4 overflow-x-auto">
 						{tabConfig.map((tab) => (
-							<TabsTrigger
+						<TabsTrigger
 								key={tab.id}
 								value={tab.id}
 								className="flex items-center whitespace-nowrap data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
-							>
+						>
 								{tab.icon}
 								{tab.label}
-							</TabsTrigger>
+						</TabsTrigger>
 						))}
 					</TabsList>
 
@@ -245,98 +245,98 @@ export default function PurchaseHistoryPage() {
 									const statusConfig = orderStatusConfig[statusKey];
 
 									return (
-										<Card
-											key={order.id}
-											className="overflow-hidden border-gray-200 hover:border-brand-magenta transition-colors"
-										>
-											<CardContent className="p-0">
-												<div className="flex flex-col md:flex-row border-b border-gray-100">
-													<div className="p-4 md:w-3/5 flex-grow">
-														<div className="flex items-center gap-3 mb-2">
-															<Package className="h-5 w-5 text-brand-magenta" />
-															<div className="font-medium">
+									<Card
+										key={order.id}
+										className="overflow-hidden border-gray-200 hover:border-brand-magenta transition-colors"
+									>
+										<CardContent className="p-0">
+											<div className="flex flex-col md:flex-row border-b border-gray-100">
+												<div className="p-4 md:w-3/5 flex-grow">
+													<div className="flex items-center gap-3 mb-2">
+														<Package className="h-5 w-5 text-brand-magenta" />
+														<div className="font-medium">
 																Pedido #{order.id.substring(0, 8)}
-															</div>
+														</div>
 															<Badge className={statusConfig.color}>
 																{statusConfig.label}
-															</Badge>
-														</div>
+														</Badge>
+													</div>
 
-														<div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-															<div className="flex items-center gap-1 text-gray-500">
-																<CalendarDays className="h-4 w-4" />
+													<div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+														<div className="flex items-center gap-1 text-gray-500">
+															<CalendarDays className="h-4 w-4" />
 																<span>{formatOrderDate(order.createdAt)}</span>
-															</div>
-															<div className="flex items-center gap-1 text-gray-500">
-																<Clock className="h-4 w-4" />
-																<span>{formatOrderTime(order.createdAt)}</span>
-															</div>
 														</div>
+														<div className="flex items-center gap-1 text-gray-500">
+															<Clock className="h-4 w-4" />
+																<span>{formatOrderTime(order.createdAt)}</span>
+														</div>
+													</div>
 
-														<div className="mt-4 space-y-2">
+													<div className="mt-4 space-y-2">
 															{order.__items__.map((item) => (
-																<div
+															<div
 																	key={item.id}
-																	className="flex items-center gap-3"
-																>
-																	<div className="w-10 h-10 bg-gray-100 rounded overflow-hidden shrink-0">
+																className="flex items-center gap-3"
+															>
+																<div className="w-10 h-10 bg-gray-100 rounded overflow-hidden shrink-0">
 																		{item.__product__.images &&
 																		item.__product__.images.length > 0 ? (
-																			<img
+																		<img
 																				src={item.__product__.images[0]}
 																				alt={item.__product__.name}
-																				className="w-full h-full object-cover"
-																			/>
-																		) : (
-																			<div className="w-full h-full flex items-center justify-center">
-																				<ShoppingBag className="h-5 w-5 text-gray-400" />
-																			</div>
-																		)}
-																	</div>
-																	<div className="flex-grow min-w-0">
-																		<p className="text-sm font-medium text-gray-900 truncate">
-																			{item.__product__.name}
-																		</p>
-																		<p className="text-xs text-gray-500">
-																			{item.quantity} x{' '}
-																			{formatCurrency(parseFloat(item.price))}
-																		</p>
-																	</div>
+																			className="w-full h-full object-cover"
+																		/>
+																	) : (
+																		<div className="w-full h-full flex items-center justify-center">
+																			<ShoppingBag className="h-5 w-5 text-gray-400" />
+																		</div>
+																	)}
 																</div>
-															))}
-														</div>
-													</div>
-
-													<div className="bg-gray-50 p-4 md:w-2/5 flex flex-col justify-between border-t md:border-t-0 md:border-l border-gray-100">
-														<div>
-															<p className="text-sm text-gray-500 mb-1">
-																Valor total
-															</p>
-															<p className="text-lg font-bold text-brand-magenta mb-4">
-																{formatCurrency(parseFloat(order.total))}
-															</p>
-
-															<div className="text-sm text-gray-500">
-																Total de itens:{' '}
-																{order.__items__.reduce(
-																	(acc, item) => acc + item.quantity,
-																	0
-																)}
+																<div className="flex-grow min-w-0">
+																	<p className="text-sm font-medium text-gray-900 truncate">
+																			{item.__product__.name}
+																	</p>
+																	<p className="text-xs text-gray-500">
+																		{item.quantity} x{' '}
+																			{formatCurrency(parseFloat(item.price))}
+																	</p>
+																</div>
 															</div>
-														</div>
-
-														<Button
-															variant="outline"
-															className="mt-4 border-gray-200 text-brand-magenta hover:bg-brand-magenta/5 hover:border-brand-magenta"
-															onClick={() => router.push(`/order/${order.id}`)}
-														>
-															Ver detalhes
-															<ChevronRight className="ml-1 h-4 w-4" />
-														</Button>
+														))}
 													</div>
 												</div>
-											</CardContent>
-										</Card>
+
+												<div className="bg-gray-50 p-4 md:w-2/5 flex flex-col justify-between border-t md:border-t-0 md:border-l border-gray-100">
+													<div>
+														<p className="text-sm text-gray-500 mb-1">
+															Valor total
+														</p>
+														<p className="text-lg font-bold text-brand-magenta mb-4">
+																{formatCurrency(parseFloat(order.total))}
+														</p>
+
+														<div className="text-sm text-gray-500">
+															Total de itens:{' '}
+																{order.__items__.reduce(
+																(acc, item) => acc + item.quantity,
+																0
+															)}
+														</div>
+													</div>
+
+													<Button
+														variant="outline"
+														className="mt-4 border-gray-200 text-brand-magenta hover:bg-brand-magenta/5 hover:border-brand-magenta"
+														onClick={() => router.push(`/order/${order.id}`)}
+													>
+														Ver detalhes
+														<ChevronRight className="ml-1 h-4 w-4" />
+													</Button>
+												</div>
+											</div>
+										</CardContent>
+									</Card>
 									);
 								})}
 							</div>

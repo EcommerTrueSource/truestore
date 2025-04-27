@@ -572,9 +572,10 @@ export default function StorePage() {
 			// Obter parâmetros de pesquisa e filtros
 			const search = searchQuery || '';
 			const category = categoryId || '';
+			const sort = sortOrder || 'featured';
 
 			console.log(
-				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}, busca: "${search}"${
+				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}, busca: "${search}", ordenação: "${sort}"${
 					append ? ' (anexando resultados)' : ''
 				}`
 			);
@@ -590,6 +591,7 @@ export default function StorePage() {
 					inStock: true,
 					active: true,
 					term: search, // Usar o termo de busca como parâmetro term
+					sortOrder: sort, // Adicionar o parâmetro de ordenação
 					...extraParams, // Adicionar parâmetros extras
 				});
 			} catch (apiError) {
@@ -635,14 +637,14 @@ export default function StorePage() {
 			}));
 
 			// Filtrar produtos pela categoria selecionada (se houver)
-			let filteredProducts = productsData;
+			let resultProducts = productsData;
 			if (category && category !== 'all') {
 				console.log(
 					`[Store] Filtrando ${productsData.length} produtos pelo categoryId: ${category}`
 				);
 
 				// Verificar produtos que correspondem à categoria selecionada
-				filteredProducts = productsData.filter((product: Product) => {
+				resultProducts = productsData.filter((product: Product) => {
 					// Verificar no categoryId do produto
 					if (product.categoryId === category) {
 						return true;
@@ -667,14 +669,14 @@ export default function StorePage() {
 				});
 
 				console.log(
-					`[Store] Filtrados ${filteredProducts.length} produtos da categoria ${category}`
+					`[Store] Filtrados ${resultProducts.length} produtos da categoria ${category}`
 				);
 
 				// Se estamos na primeira página e temos poucos produtos após filtragem,
 				// carregar mais páginas para tentar encontrar mais produtos da categoria
 				if (
 					!append &&
-					filteredProducts.length < 4 &&
+					resultProducts.length < 4 &&
 					productsData.length === PRODUCTS_PER_PAGE
 				) {
 					console.log(
@@ -703,6 +705,7 @@ export default function StorePage() {
 									inStock: true,
 									active: true,
 									term: search,
+									sortOrder: sort, // Adicionar parâmetro de ordenação
 								});
 
 								// Verificar se temos resultados
@@ -805,7 +808,29 @@ export default function StorePage() {
 						console.log(
 							`[Store] Finalizada busca adicional, encontrados ${finalFilteredProducts.length} produtos da categoria`
 						);
-						setProducts(finalFilteredProducts);
+
+						// Ordenar os produtos antes de atualizar o estado
+						if (sort && sort !== 'featured') {
+							console.log(`[Store] Ordenando produtos adicionais por: ${sort}`);
+							const sortedProducts = [...finalFilteredProducts].sort((a, b) => {
+								switch (sort) {
+									case 'price-asc':
+										return a.price - b.price;
+									case 'price-desc':
+										return b.price - a.price;
+									case 'name-asc':
+										return a.name.localeCompare(b.name);
+									case 'name-desc':
+										return b.name.localeCompare(a.name);
+									default:
+										return 0;
+								}
+							});
+							setProducts(sortedProducts);
+						} else {
+							setProducts(finalFilteredProducts);
+						}
+
 						setIsLoading(false);
 						setIsLoadingCategory(false);
 					};
@@ -813,6 +838,26 @@ export default function StorePage() {
 					// Iniciar o carregamento adicional, permitindo que a UI atualize com os resultados iniciais
 					loadMoreForCategory();
 				}
+			}
+
+			// Ordenar os produtos no lado do cliente, já que a API não suporta ordenação
+			if (sort && sort !== 'featured') {
+				console.log(`[Store] Ordenando produtos por: ${sort}`);
+				resultProducts = [...resultProducts].sort((a, b) => {
+					switch (sort) {
+						case 'price-asc':
+							return a.price - b.price;
+						case 'price-desc':
+							return b.price - a.price;
+						case 'name-asc':
+							return a.name.localeCompare(b.name);
+						case 'name-desc':
+							return b.name.localeCompare(a.name);
+						default:
+							return 0;
+					}
+				});
+				console.log(`[Store] Produtos ordenados com sucesso`);
 			}
 
 			// Se estamos anexando a uma lista existente, mesclar resultados
@@ -823,7 +868,7 @@ export default function StorePage() {
 					const existingIds = new Set(
 						prev.map((product: Product) => product.id)
 					);
-					const newProducts = filteredProducts.filter(
+					const newProducts = resultProducts.filter(
 						(product: Product) => !existingIds.has(product.id)
 					);
 
@@ -836,17 +881,40 @@ export default function StorePage() {
 					console.log(
 						`[Store] Adicionando ${newProducts.length} novos produtos aos ${prev.length} existentes`
 					);
-					return [...prev, ...newProducts];
+
+					// Combinar produtos existentes com novos produtos
+					const combinedProducts = [...prev, ...newProducts];
+
+					// Se temos uma ordenação ativa, aplicar novamente em toda a lista
+					if (sort && sort !== 'featured') {
+						console.log(`[Store] Reordenando lista combinada por: ${sort}`);
+						return combinedProducts.sort((a, b) => {
+							switch (sort) {
+								case 'price-asc':
+									return a.price - b.price;
+								case 'price-desc':
+									return b.price - a.price;
+								case 'name-asc':
+									return a.name.localeCompare(b.name);
+								case 'name-desc':
+									return b.name.localeCompare(a.name);
+								default:
+									return 0;
+							}
+						});
+					}
+
+					return combinedProducts;
 				} else {
 					console.log(
-						`[Store] Substituindo produtos existentes por ${filteredProducts.length} novos produtos`
+						`[Store] Substituindo produtos existentes por ${resultProducts.length} novos produtos`
 					);
-					return filteredProducts;
+					return resultProducts;
 				}
 			});
 
 			// Definir a flag hasMore com base no número de produtos recebidos
-			const receivedCount = filteredProducts.length;
+			const receivedCount = resultProducts.length;
 			// Se recebemos menos produtos que o esperado, provavelmente não há mais páginas
 			setHasMore(receivedCount >= PRODUCTS_PER_PAGE);
 			console.log(
@@ -856,7 +924,7 @@ export default function StorePage() {
 			);
 
 			// Atualizar o número da página apenas se o append for bem-sucedido
-			if (!append || filteredProducts.length > 0) {
+			if (!append || resultProducts.length > 0) {
 				setPage(currentPage);
 			}
 
@@ -905,7 +973,7 @@ export default function StorePage() {
 				loadProducts(nextPage, true, { _t: Date.now() });
 			}, 500);
 		}
-	}, [isLoadingMore, hasMore, page, loadProducts]);
+	}, [isLoadingMore, hasMore, page, loadProducts, sortOrder]);
 
 	// Configurar o observador de interseção para o carregamento infinito
 	useEffect(() => {

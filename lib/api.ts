@@ -1312,6 +1312,7 @@ export async function searchProductsByTerm({
  * @param inStock Filtrar apenas produtos em estoque (default: true)
  * @param active Filtrar apenas produtos ativos (default: true)
  * @param term Termo para pesquisa de produtos (opcional)
+ * @param sortOrder Ordem de classificação dos produtos (opcional)
  */
 export async function searchWarehouseProducts({
   warehouseName = 'MKT-Creator',
@@ -1319,7 +1320,8 @@ export async function searchWarehouseProducts({
   limit = 12,
   inStock = true,
   active = true,
-  term = ''
+  term = '',
+  sortOrder = 'featured'
 }: {
   warehouseName?: string;
   page?: number;
@@ -1327,6 +1329,7 @@ export async function searchWarehouseProducts({
   inStock?: boolean;
   active?: boolean;
   term?: string;
+  sortOrder?: string;
 } = {}) {
   try {
     const queryParams = new URLSearchParams({
@@ -1334,7 +1337,8 @@ export async function searchWarehouseProducts({
       page: page.toString(),
       limit: limit.toString(),
       inStock: inStock.toString(),
-      active: active.toString()
+      active: active.toString(),
+      sortOrder: sortOrder
     });
 
     // Adicionar o termo de busca se fornecido

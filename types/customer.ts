@@ -15,6 +15,8 @@ export interface CustomerCategory {
   ticketValue: string;
   isCustomTicket: boolean;
   frequencyPerMonth: number;
+  depositoId: string;
+  depositoNome: string;
   createdAt: string;
   updatedAt: string;
 }

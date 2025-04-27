@@ -156,9 +156,9 @@ export default function CustomerCategoryInfo() {
 
 						<div className="mt-2 text-xs text-brand-blue/70 flex flex-col gap-1">
 							<div className="flex items-center gap-1">
-								<Calendar className="h-3 w-3 text-brand-blue/70" />
-								Renovação a cada{' '}
-								{frequencyPerMonth === 1 ? 'mês' : `${frequencyPerMonth} meses`}
+							<Calendar className="h-3 w-3 text-brand-blue/70" />
+							Renovação a cada{' '}
+							{frequencyPerMonth === 1 ? 'mês' : `${frequencyPerMonth} meses`}
 							</div>
 							{nextRenewalDate && (
 								<div className="flex items-center gap-1">
