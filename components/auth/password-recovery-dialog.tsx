@@ -564,28 +564,26 @@ export function PasswordRecoveryDialog({
 										</h3>
 
 										<p className="text-gray-600 text-center max-w-xs mx-auto mb-4">
-											Sua senha foi atualizada. Agora você pode entrar com sua
-											nova senha.
+											Sua senha foi atualizada. Para utilizar sua nova senha,
+											realize o login novamente.
 										</p>
 									</div>
 
-									<div className="flex flex-col space-y-3 mt-4">
-										<DialogClose asChild>
-											<Button className="w-full bg-gradient-to-r from-brand-magenta to-brand-orange hover:from-brand-magenta/90 hover:to-brand-orange/90 text-white py-2 h-12 shadow-md hover:shadow-lg transition-all duration-300">
-												<div className="flex items-center justify-center">
-													<span>Fechar</span>
-												</div>
-											</Button>
-										</DialogClose>
-
+									<div className="mt-4">
 										<Button
-											variant="outline"
 											onClick={handleSignOutAndClose}
-											className="w-full border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-brand-magenta"
+											className="w-full bg-gradient-to-r from-brand-magenta to-brand-orange hover:from-brand-magenta/90 hover:to-brand-orange/90 text-white py-2 h-12 shadow-md hover:shadow-lg transition-all duration-300"
 										>
-											<div className="flex items-center justify-center">
-												<span>Sair e fazer login novamente</span>
-											</div>
+											{isLoading ? (
+												<div className="flex items-center justify-center">
+													<div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin mr-2"></div>
+													<span>Processando...</span>
+												</div>
+											) : (
+												<div className="flex items-center justify-center">
+													<span>Fazer login novamente com a nova senha</span>
+												</div>
+											)}
 										</Button>
 									</div>
 								</motion.div>
