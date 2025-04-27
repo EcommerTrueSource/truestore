@@ -48,7 +48,7 @@ export default function CustomerCategoryInfo() {
 			<Card className="w-full bg-white/70 backdrop-blur-md shadow-md">
 				<CardHeader>
 					<CardTitle className="text-brand-magenta">
-						Informações de Categoria
+						Informações de Cliente
 					</CardTitle>
 					<CardDescription className="text-brand-blue/70">
 						Detalhes sobre seu plano e saldo
@@ -67,10 +67,29 @@ export default function CustomerCategoryInfo() {
 		customer.__category__;
 	const availableBalance = getAvailableBalance();
 
-	// Extrair apenas a parte "Atleta" do nome da categoria
+	// Extrair apenas a parte "Atleta" do nome da categoria para o badge
 	const simplifiedCategoryName = name.includes('Atleta')
 		? 'Atleta'
 		: name.replace(/Creator -|\[.*\]|\(\$.*\)/g, '').trim();
+
+	// Extrair a parte principal da categoria (antes do hífen)
+	const extractMainCategory = (categoryName: string) => {
+		// Caso especial para "Top Master" ou "Clinica Top Master"
+		if (categoryName.includes('Top Master')) {
+			return 'Top Master';
+		}
+
+		// Se tiver hífen, pega apenas a parte antes do hífen
+		if (categoryName.includes('-')) {
+			return categoryName.split('-')[0].trim();
+		}
+
+		// Se não tiver hífen, retorna o nome completo
+		return categoryName;
+	};
+
+	// Obter a categoria principal
+	const mainCategory = extractMainCategory(name);
 
 	// Formatação de números
 	const formatter = new Intl.NumberFormat('pt-BR', {
@@ -110,7 +129,7 @@ export default function CustomerCategoryInfo() {
 						</Badge>
 					</div>
 					<CardDescription className="text-center mx-auto text-sm text-brand-blue/70 max-w-[280px]">
-						{description}
+						{mainCategory}
 					</CardDescription>
 				</CardHeader>
 
