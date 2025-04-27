@@ -20,7 +20,7 @@ export default function ProductGrid() {
 	const [visibleProducts, setVisibleProducts] = useState(PRODUCTS_PER_PAGE);
 
 	const categoryId = searchParams.get('category');
-	const sortBy = searchParams.get('sort') || 'name-asc';
+	const sortBy = searchParams.get('sort') || 'featured';
 	const searchQuery = searchParams.get('search') || '';
 
 	useEffect(() => {
@@ -52,17 +52,36 @@ export default function ProductGrid() {
 		  )
 		: products;
 
+	// Ordenar produtos com base no parâmetro de ordenação
+	const sortedProducts = [...filteredProducts].sort((a, b) => {
+		switch (sortBy) {
+			case 'price-asc':
+				return a.price - b.price;
+			case 'price-desc':
+				return b.price - a.price;
+			case 'name-asc':
+				return a.name.localeCompare(b.name);
+			case 'name-desc':
+				return b.name.localeCompare(a.name);
+			case 'featured':
+			default:
+				// Assumindo que produtos em destaque já vêm ordenados da API
+				// ou podemos usar alguma lógica específica para ordenação por destaque
+				return 0;
+		}
+	});
+
 	const loadMoreProducts = () => {
 		setVisibleProducts((prev) => prev + PRODUCTS_PER_PAGE);
 	};
 
-	const hasMoreProducts = filteredProducts.length > visibleProducts;
+	const hasMoreProducts = sortedProducts.length > visibleProducts;
 
 	if (isLoading) {
 		return <ProductSkeleton />;
 	}
 
-	if (filteredProducts.length === 0) {
+	if (sortedProducts.length === 0) {
 		return (
 			<div className="bg-white text-center py-12 rounded-xl border border-gray-100 shadow-sm">
 				<div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-gray-100 mb-4">
@@ -89,7 +108,7 @@ export default function ProductGrid() {
 	return (
 		<div className="space-y-6">
 			<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-				{filteredProducts.slice(0, visibleProducts).map((product) => (
+				{sortedProducts.slice(0, visibleProducts).map((product) => (
 					<ProductCard
 						key={product.id}
 						product={product}
@@ -113,8 +132,8 @@ export default function ProductGrid() {
 
 			<div className="flex justify-center">
 				<p className="text-gray-500 text-sm">
-					Exibindo {Math.min(visibleProducts, filteredProducts.length)} de{' '}
-					{filteredProducts.length} produto(s)
+					Exibindo {Math.min(visibleProducts, sortedProducts.length)} de{' '}
+					{sortedProducts.length} produto(s)
 				</p>
 			</div>
 		</div>
