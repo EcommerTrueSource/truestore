@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { TrueCore } from '@/lib/true-core-proxy';
 
 /**
@@ -10,65 +10,62 @@ import { TrueCore } from '@/lib/true-core-proxy';
 export async function GET(request: NextRequest) {
   console.log('[API Banner] Iniciando requisição');
   
-  // Obter a URL base da API True Core do arquivo de configuração
+  // Obter a URL base da API True Core
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
     "https://painel-true-core-app-460815276546.us-central1.run.app/api";
   console.log(`[API Banner] URL da API: ${baseUrl}`);
   
-  // Obter o token de autenticação
-  const token = TrueCore.extractToken(request);
-  console.log(`[API Banner] Token encontrado: ${token ? 'Sim' : 'Não'}`);
-  
-  if (!token) {
-    // Retornar JSON vazio se não houver token
-    console.log('[API Banner] Sem token disponível, retornando resposta vazia');
-    return new Response(JSON.stringify({ imageUrl: null }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-  }
-  
   try {
-    // Fazer chamada fetch direta para o endpoint da API sem usar o proxy
-    const url = `${baseUrl.replace('/api', '')}/marketing/campaign/banner`;
-    console.log(`[API Banner] Chamando API diretamente: ${url}`);
+    // Obter o token de autenticação
+    const token = TrueCore.extractToken(request);
+    console.log(`[API Banner] Token encontrado: ${token ? 'Sim' : 'Não'}`);
     
-    const response = await fetch(url, {
+    // URL completa do endpoint
+    const apiUrl = `${baseUrl}/marketing/campaign/banner`;
+    console.log(`[API Banner] Fazendo requisição para: ${apiUrl}`);
+    
+    // Fazer requisição diretamente ao endpoint
+    const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
-      cache: 'no-store' // Evita problemas de cache
+      cache: 'no-store'
     });
+    
+    console.log(`[API Banner] Status da resposta: ${response.status}`);
     
     if (!response.ok) {
-      console.error(`[API Banner] Erro da API: ${response.status} ${response.statusText}`);
-      throw new Error(`Erro ao chamar API: ${response.status}`);
+      throw new Error(`Erro HTTP: ${response.status}`);
     }
     
-    // Processar resposta
+    // Obter o JSON da resposta
     const data = await response.json();
-    console.log(`[API Banner] Resposta obtida com sucesso: ${JSON.stringify(data)}`);
+    console.log(`[API Banner] Dados obtidos: ${JSON.stringify(data)}`);
     
-    // Retornar a resposta como JSON
-    return new Response(JSON.stringify(data), {
+    // Retornar resposta JSON
+    return NextResponse.json(data, {
       status: 200,
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, max-age=0'
       }
     });
-  } catch (error) {
-    console.error('[API Banner] Erro:', error);
-    // Em caso de erro, retornar um JSON vazio mas válido para não quebrar o frontend
-    return new Response(JSON.stringify({ imageUrl: null }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json'
+  } catch (error: any) {
+    console.error(`[API Banner] Erro: ${error?.message || 'Desconhecido'}`);
+    
+    // Retornar erro como JSON para evitar HTML
+    return NextResponse.json(
+      { error: 'Erro ao obter banner', message: error?.message || 'Erro desconhecido' }, 
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, max-age=0'
+        }
       }
-    });
+    );
   }
 } 

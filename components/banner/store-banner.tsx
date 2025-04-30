@@ -27,8 +27,8 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				
 				// Retry com delay se não for a primeira tentativa
 				if (retryCount > 0) {
-					console.log(`[StoreBanner] Tentativa #${retryCount+1} de obter o banner...`);
-					await new Promise(resolve => setTimeout(resolve, 1000));
+					console.log(`[StoreBanner] Tentativa #${retryCount+1} de obter o banner em ${retryCount * 1000}ms...`);
+					await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
 				}
 
 				// Verificar se temos um token válido
@@ -48,23 +48,22 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				const token = tokenStore.getToken();
 				console.log('[StoreBanner] Token obtido, buscando banner...');
 
+				// Fazer requisição REST com opções apropriadas
 				const response = await fetch('/api/marketing/campaign/banner', {
 					method: 'GET',
 					headers: {
-						'Content-Type': 'application/json',
 						'Accept': 'application/json',
 						'Authorization': `Bearer ${token}`,
 					},
-					cache: 'no-store',
-					credentials: 'include',
+					next: { revalidate: 60 }, // Cache por 1 minuto
 				});
 
 				if (!response.ok) {
 					console.error(`[StoreBanner] Erro HTTP: ${response.status}`);
 					
 					// Tentar novamente se for erro de autenticação
-					if (response.status === 401 && retryCount < maxRetries) {
-						console.warn('[StoreBanner] Erro 401, tentando novamente...');
+					if ((response.status === 401 || response.status === 403) && retryCount < maxRetries) {
+						console.warn('[StoreBanner] Erro de autenticação, tentando novamente...');
 						retryCount++;
 						setTimeout(fetchBanner, 1500);
 						return;
@@ -73,31 +72,15 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 					throw new Error(`Erro ${response.status} ao buscar banner`);
 				}
 
-				// Tentar processar a resposta com tratamento de erro robusto
-				let data;
-				try {
-					const responseText = await response.text();
-					
-					// Verificar se o texto parece ser JSON válido antes de fazer parse
-					if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
-						data = JSON.parse(responseText);
-					} else {
-						console.error('[StoreBanner] Resposta não é JSON válido:', responseText.substring(0, 100));
-						throw new Error('Resposta inválida do servidor');
-					}
-				} catch (parseError) {
-					console.error('[StoreBanner] Erro ao processar resposta JSON:', parseError);
-					
-					// Tentar novamente em caso de erro de parsing
-					if (retryCount < maxRetries) {
-						retryCount++;
-						setTimeout(fetchBanner, 1500);
-						return;
-					}
-					
-					throw parseError;
+				// Obter dados JSON da resposta com tratamento de erro apropriado
+				const contentType = response.headers.get('content-type');
+				if (!contentType || !contentType.includes('application/json')) {
+					console.error('[StoreBanner] Resposta não é JSON:', contentType);
+					throw new Error('Resposta não é do tipo JSON');
 				}
 
+				const data = await response.json();
+				
 				// Verificar se a resposta contém uma URL de banner válida
 				if (data && data.imageUrl) {
 					console.log(`[StoreBanner] Banner obtido com sucesso: ${data.imageUrl}`);
@@ -115,6 +98,13 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				console.error('[StoreBanner] Erro ao buscar banner:', error);
 				if (mounted) {
 					setError(true);
+				}
+				
+				// Tentar novamente em caso de erro de rede ou parse se ainda temos tentativas
+				if (retryCount < maxRetries) {
+					retryCount++;
+					setTimeout(fetchBanner, retryCount * 1500);
+					return;
 				}
 			} finally {
 				if (mounted) {
