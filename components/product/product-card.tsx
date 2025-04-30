@@ -315,6 +315,7 @@ export function ProductCard({
 							onClick={() => {
 								const params = new URLSearchParams(searchParams.toString());
 								params.set('category', productCategory.id);
+								console.log(`[ProductCard] Categoria clicada no badge: ${getCategoryName()} (ID: ${productCategory.id})`);
 								router.push(`/store?${params.toString()}`);
 							}}
 							className="h-7 text-xs gap-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -375,6 +376,7 @@ export function ProductCard({
 											e.stopPropagation();
 											const params = new URLSearchParams();
 											params.set('category', productCategory.id);
+											console.log(`[ProductCard] Categoria clicada no rodapé: ${getCategoryName()} (ID: ${productCategory.id})`);
 											router.push(`/store?${params.toString()}`);
 										}}
 									>

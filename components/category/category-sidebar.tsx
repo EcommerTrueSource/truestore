@@ -10,13 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import type { Category } from '@/types/category';
 
 export function CategorySidebar() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const { categories, isLoading, error, reload } = useCategories();
-	const [displayedCategories, setDisplayedCategories] = useState([]);
+	const [displayedCategories, setDisplayedCategories] = useState<Category[]>([]);
 	const initialLoadComplete = useRef(false);
 
 	const currentCategory = searchParams.get('category');
@@ -61,7 +62,7 @@ export function CategorySidebar() {
 		} else {
 			params.set('category', categoryId);
 			console.log(
-				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId})`
+				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId}). Usando endpoint com category=${categoryId}`
 			);
 		}
 		router.push(`${pathname}?${params.toString()}`);

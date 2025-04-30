@@ -32,6 +32,22 @@ export async function GET(request: NextRequest) {
     // Copiar os parâmetros de consulta da requisição original
     const searchParams = new URLSearchParams(request.nextUrl.searchParams.toString());
     
+    // Remover parâmetro 'categoryName' se existir, pois não é mais necessário
+    if (searchParams.has('categoryName')) {
+      console.log(`[TrueCore] Removendo parâmetro 'categoryName' obsoleto`);
+      searchParams.delete('categoryName');
+    }
+    
+    // Se houver 'categoryId', convertê-lo para 'category' para o backend
+    if (searchParams.has('categoryId')) {
+      const categoryId = searchParams.get('categoryId');
+      if (categoryId) {
+        console.log(`[TrueCore] Convertendo 'categoryId' para 'category': ${categoryId}`);
+        searchParams.set('category', categoryId);
+      }
+      searchParams.delete('categoryId'); // Remover o original
+    }
+    
     // Adicionar filtros padrão se não estiverem presentes
     if (!searchParams.has('inStock')) searchParams.set('inStock', 'true');
     if (!searchParams.has('active')) searchParams.set('active', 'true');

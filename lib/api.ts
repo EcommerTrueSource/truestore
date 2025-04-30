@@ -481,7 +481,52 @@ export async function searchProducts({
   warehouseName?: string; // Parâmetro importante: determina o warehouse específico baseado na categoria do cliente (MKT-Creator ou MKT-Top Master)
 }): Promise<Product[]> {
   try {
-    console.log('[API] Usando função wrapper searchProducts');
+    console.log(`[API] Buscando produtos (searchProducts): página ${page}, limite ${limit}`);
+    
+    // Configurar parâmetros de busca
+    const params: any = {};
+    
+    // Adicionar termo de busca
+    if (query) {
+      params.term = query;
+    } else if (searchQuery) {
+      params.term = searchQuery;
+    }
+    
+    // Adicionar paginação
+    params.page = page;
+    params.limit = limit;
+    
+    // Adicionar filtros de preço (se fornecidos)
+    if (minPrice !== undefined) params.minPrice = minPrice;
+    if (maxPrice !== undefined) params.maxPrice = maxPrice;
+    
+    // Adicionar parâmetro de depósito específico (se fornecido)
+    if (warehouseName) {
+      params.warehouseName = warehouseName;
+      console.log(`[API] Buscando produtos no depósito: ${warehouseName}`);
+    }
+    
+    console.log(`[API] Parâmetros da busca:`, { 
+      query, 
+      categoryId, 
+      categoryName, 
+      page, 
+      limit, 
+      warehouseName 
+    });
+    
+    // Adicionar categoria se fornecida
+    if (categoryId) {
+      // Caso especial: se for a categoria Proteínas, incluir ambos os IDs no parâmetro categoryIds
+      if (categoryId === '8bb26b67-a7ce-4001-ae51-ceec0082fb89') {
+        console.log('[API] Categoria Proteínas detectada, incluindo ambos os IDs no parâmetro categoryIds');
+        params.categoryIds = JSON.stringify(['8bb26b67-a7ce-4001-ae51-ceec0082fb89', '8fade785-4ad2-4f53-b715-c4a662dd6be6']);
+      } else {
+        params.category = categoryId; // Usar 'category' em vez de 'categoryId' para corresponder ao backend
+        console.log(`[API] Filtrando por categoria com ID: ${categoryId}`);
+      }
+    }
     
     // Garantir que temos um warehouse definido para o cliente
     if (!warehouseName) {
@@ -490,11 +535,11 @@ export async function searchProducts({
         const savedWarehouse = localStorage.getItem('warehouse_name');
         if (savedWarehouse) {
           console.log(`[API] Usando warehouse do localStorage: ${savedWarehouse}`);
-          warehouseName = savedWarehouse;
+          params.warehouseName = savedWarehouse;
         } else {
           // Padrão para Creator se nenhum for detectado
           console.log('[API] Nenhum warehouse encontrado, usando MKT-Creator como padrão');
-          warehouseName = 'MKT-Creator';
+          params.warehouseName = 'MKT-Creator';
         }
       }
     }
@@ -690,15 +735,7 @@ export async function fetchProductsByCategory({
     
     // Adicionar categoria se fornecida
     if (categoryId) {
-      // Caso especial: se for a categoria Proteínas, incluir ambos os IDs no parâmetro categoryIds
-      if (categoryId === '8bb26b67-a7ce-4001-ae51-ceec0082fb89') {
-        console.log('[API] Categoria Proteínas detectada, incluindo ambos os IDs conhecidos');
-        params.categoryIds = JSON.stringify(['8bb26b67-a7ce-4001-ae51-ceec0082fb89', '8fade785-4ad2-4f53-b715-c4a662dd6be6']);
-      } else {
-        // Usar 'category' em vez de 'categoryId' para corresponder ao backend
-        params.category = categoryId;
-      }
-      console.log(`[API] Filtrando por categoria: ${categoryId}`);
+      params.category = categoryId;
     }
     
     // Construir string de consulta
