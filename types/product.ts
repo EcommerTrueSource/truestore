@@ -14,6 +14,16 @@ export interface Product {
   codigo?: string
   unidade?: string
   active?: boolean
+  // Informações de estoque do warehouse
+  warehouseStock?: {
+    available: number
+    total: number
+    reserved: number
+    warehouseName: string
+    error?: string
+  }
+  // Flag para indicar se o produto está em estoque
+  inStock?: boolean
 }
 
 export interface Category {

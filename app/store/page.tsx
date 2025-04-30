@@ -636,10 +636,14 @@ export default function StorePage() {
 				unidade: item.unit || 'UN',
 				active: item.active || true,
 				// Preservar informações de estoque do warehouse se disponíveis
-				warehouseStock: item.warehouseStock || undefined
+				warehouseStock: item.warehouseStock || undefined,
+				// Adicionar flag para indicar se o produto está em estoque
+				inStock: item.warehouseStock ? 
+					(item.warehouseStock.available > 0) : 
+					(item.stock > 0)
 			}));
 
-			// A filtragem de categoria agora é feita no backend, não precisamos filtrar novamente
+			// A filtragem de categoria é feita no backend, não precisamos filtrar novamente
 			let filteredProducts = productsData;
 			
 			// Apenas para depuração, calcular quantos produtos correspondem à categoria selecionada
@@ -659,6 +663,10 @@ export default function StorePage() {
 				}).length;
 				
 				console.log(`[Store] Correspondência de categoria (apenas log): ${categoryMatchCount} de ${productsData.length} produtos correspondem à categoria ${category}`);
+				
+				// Verificar informações de estoque para depuração
+				const withStock = productsData.filter((product: Product) => product.inStock).length;
+				console.log(`[Store] Produtos com estoque disponível: ${withStock} de ${productsData.length} (${withStock > 0 ? Math.round(withStock/productsData.length*100) : 0}%)`);
 			}
 
 			// Se estamos anexando a uma lista existente, mesclar resultados

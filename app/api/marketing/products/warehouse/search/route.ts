@@ -66,6 +66,10 @@ export async function GET(request: NextRequest) {
     // Garantir que o parâmetro 'category' seja mantido se já estiver presente
     if (searchParams.has('category')) {
       console.log(`[TrueCore] Usando categoria com ID: ${searchParams.get('category')}`);
+      
+      // Importante: O painel-true precisa deste parâmetro para usar o fluxo especial de filtragem
+      // que integra dados do PostgreSQL (categorias) com BigQuery (estoque)
+      searchParams.set('usePostgresFirst', 'true');
     }
     
     // Adicionar/garantir filtros padrão se não estiverem presentes
@@ -80,6 +84,9 @@ export async function GET(request: NextRequest) {
     // Adicionar parâmetros de paginação se não estiverem presentes
     if (!searchParams.has('page')) searchParams.set('page', '0');
     if (!searchParams.has('limit')) searchParams.set('limit', '12');
+    
+    // Adicionar timestamp para evitar cache
+    searchParams.set('_t', Date.now().toString());
     
     // Tratar parâmetro especial categoryIds (array de IDs de categoria)
     if (searchParams.has('categoryIds')) {
@@ -96,9 +103,10 @@ export async function GET(request: NextRequest) {
             // Remover o parâmetro original para evitar confusão
             searchParams.delete('categoryIds');
             
-            // Adicionar o primeiro ID como categoryId principal
+            // Adicionar o primeiro ID como categoria principal
             if (!searchParams.has('category')) {
               searchParams.set('category', categoryIds[0]);
+              searchParams.set('usePostgresFirst', 'true');
             }
           }
         }
@@ -121,7 +129,7 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      next: { revalidate: 60 } // Revalidar a cada 60 segundos
+      next: { revalidate: 0 } // Não usar cache
     });
 
     // Se a resposta não for ok, retornar o erro
@@ -150,7 +158,15 @@ export async function GET(request: NextRequest) {
       // Log específico para categoria, se aplicável
       if (searchParams.has('category')) {
         const categoryId = searchParams.get('category');
-        console.log(`[TrueCore] Filtro por categoria ${categoryId}: ${data.data.filter((p: any) => p.categoryId === categoryId || (p.category && p.category.id === categoryId)).length} produtos correspondem diretamente`);
+        const matchingProducts = data.data.filter((p: any) => 
+          p.categoryId === categoryId || 
+          (p.category && p.category.id === categoryId)
+        );
+        console.log(`[TrueCore] Produtos da categoria ${categoryId}: ${matchingProducts.length} de ${data.data.length} (${matchingProducts.length > 0 ? Math.round(matchingProducts.length/data.data.length*100) : 0}%)`);
+        
+        // Verificar informações de estoque para depuração
+        const withStock = data.data.filter((p: any) => p.warehouseStock && p.warehouseStock.available > 0).length;
+        console.log(`[TrueCore] Produtos com estoque disponível: ${withStock} de ${data.data.length} (${withStock > 0 ? Math.round(withStock/data.data.length*100) : 0}%)`);
       }
     }
     

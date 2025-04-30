@@ -1391,8 +1391,12 @@ export async function searchWarehouseProducts({
     // Adicionar o filtro de categoria se fornecido
     if (category && category.trim()) {
       queryParams.append('category', category.trim());
-      console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName}`);
+      queryParams.append('usePostgresFirst', 'true'); // Parâmetro para usar o fluxo otimizado do backend
+      console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName} (usando PostgreSQL primeiro)`);
     }
+
+    // Adicionar timestamp para evitar cache
+    queryParams.append('_t', Date.now().toString());
 
     // Utilizar a rota específica para busca de produtos por warehouse
     const url = `/api/marketing/products/warehouse/search?${queryParams.toString()}`;
@@ -1404,7 +1408,8 @@ export async function searchWarehouseProducts({
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      credentials: 'include'
+      credentials: 'include',
+      cache: 'no-store' // Não usar cache
     });
 
     if (!response.ok) {
@@ -1425,7 +1430,11 @@ export async function searchWarehouseProducts({
           p.categoryId === category || 
           (p.category && p.category.id === category)
         );
-        console.log(`[API] Produtos da categoria ${category}: ${matchingProducts.length} de ${data.data.length} (${Math.round(matchingProducts.length/data.data.length*100)}%)`);
+        console.log(`[API] Produtos da categoria ${category}: ${matchingProducts.length} de ${data.data.length} (${matchingProducts.length > 0 ? Math.round(matchingProducts.length/data.data.length*100) : 0}%)`);
+        
+        // Verificar informações de estoque
+        const withStock = data.data.filter((p: any) => p.warehouseStock && p.warehouseStock.available > 0).length;
+        console.log(`[API] Produtos com estoque disponível: ${withStock} de ${data.data.length} (${withStock > 0 ? Math.round(withStock/data.data.length*100) : 0}%)`);
       }
     }
     
