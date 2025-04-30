@@ -590,6 +590,7 @@ export default function StorePage() {
 					inStock: true,
 					active: true,
 					term: search, // Usar o termo de busca como parâmetro term
+					category: category, // Adicionar o ID da categoria para filtrar
 					...extraParams, // Adicionar parâmetros extras
 				});
 			} catch (apiError) {
@@ -693,7 +694,7 @@ export default function StorePage() {
 							try {
 								// Carregar a próxima página
 								console.log(
-									`[Store] Carregando página ${currentPage} para buscar mais produtos da categoria`
+									`[Store] Carregando página ${currentPage} para buscar mais produtos da categoria ${category}`
 								);
 
 								const nextPageResponse = await searchWarehouseProducts({
@@ -703,6 +704,7 @@ export default function StorePage() {
 									inStock: true,
 									active: true,
 									term: search,
+									category: category, // Adicionar a categoria para filtrar
 								});
 
 								// Verificar se temos resultados

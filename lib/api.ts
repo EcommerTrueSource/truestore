@@ -1357,7 +1357,8 @@ export async function searchWarehouseProducts({
   limit = 12,
   inStock = true,
   active = true,
-  term = ''
+  term = '',
+  category = ''
 }: {
   warehouseName?: string;
   page?: number;
@@ -1365,6 +1366,7 @@ export async function searchWarehouseProducts({
   inStock?: boolean;
   active?: boolean;
   term?: string;
+  category?: string;
 } = {}) {
   try {
     const queryParams = new URLSearchParams({
@@ -1379,6 +1381,12 @@ export async function searchWarehouseProducts({
     if (term && term.trim()) {
       queryParams.append('term', term.trim());
       console.log(`[API] Buscando produtos com termo: "${term}" no warehouse: ${warehouseName}`);
+    }
+
+    // Adicionar o filtro de categoria se fornecido
+    if (category && category.trim()) {
+      queryParams.append('category', category.trim());
+      console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName}`);
     }
 
     // Utilizar a rota específica para busca de produtos por warehouse

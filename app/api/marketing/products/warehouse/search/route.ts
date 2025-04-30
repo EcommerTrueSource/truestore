@@ -63,6 +63,11 @@ export async function GET(request: NextRequest) {
     if (!searchParams.has('inStock')) searchParams.set('inStock', 'true');
     if (!searchParams.has('active')) searchParams.set('active', 'true');
     
+    // Log para categoria, se presente
+    if (searchParams.has('category')) {
+      console.log(`[TrueCore] Filtrando por ID de categoria: ${searchParams.get('category')}`);
+    }
+    
     // Garantir que temos o parâmetro warehouseName
     if (!searchParams.has('warehouseName')) {
       searchParams.set('warehouseName', 'MKT-Creator');
