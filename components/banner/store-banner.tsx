@@ -15,8 +15,6 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 
 	useEffect(() => {
 		let mounted = true;
-		const maxRetries = 3;
-		let retryCount = 0;
 		
 		const fetchBanner = async () => {
 			if (!mounted) return;
@@ -25,23 +23,10 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				setIsLoading(true);
 				setError(false);
 				
-				// Retry com delay se não for a primeira tentativa
-				if (retryCount > 0) {
-					console.log(`[StoreBanner] Tentativa #${retryCount+1} de obter o banner em ${retryCount * 1000}ms...`);
-					await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
-				}
-
 				// Verificar se temos um token válido
 				if (!tokenStore.hasValidToken()) {
 					console.warn('[StoreBanner] Token não encontrado ou inválido');
-					
-					if (retryCount < maxRetries) {
-						retryCount++;
-						setTimeout(fetchBanner, 1500);
-						return;
-					}
-					
-					throw new Error('Token inválido após várias tentativas');
+					throw new Error('Token inválido');
 				}
 
 				// Obter o token para a chamada
@@ -60,15 +45,6 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 
 				if (!response.ok) {
 					console.error(`[StoreBanner] Erro HTTP: ${response.status}`);
-					
-					// Tentar novamente se for erro de autenticação
-					if ((response.status === 401 || response.status === 403) && retryCount < maxRetries) {
-						console.warn('[StoreBanner] Erro de autenticação, tentando novamente...');
-						retryCount++;
-						setTimeout(fetchBanner, 1500);
-						return;
-					}
-					
 					throw new Error(`Erro ${response.status} ao buscar banner`);
 				}
 
@@ -98,13 +74,6 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				console.error('[StoreBanner] Erro ao buscar banner:', error);
 				if (mounted) {
 					setError(true);
-				}
-				
-				// Tentar novamente em caso de erro de rede ou parse se ainda temos tentativas
-				if (retryCount < maxRetries) {
-					retryCount++;
-					setTimeout(fetchBanner, retryCount * 1500);
-					return;
 				}
 			} finally {
 				if (mounted) {
