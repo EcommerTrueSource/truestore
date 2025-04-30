@@ -150,6 +150,7 @@ export default function StoreLayout({
 				{/* Sidebar - apenas se não estiver oculta */}
 				{!hideSidebar && (
 					<>
+						{/* Sidebar temporariamente desabilitado
 						<div
 							className={`
 								lg:w-64 lg:flex-shrink-0 transition-all duration-300
@@ -158,24 +159,22 @@ export default function StoreLayout({
 								${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
 							`}
 						>
-							{/* <CategorySidebar /> */}
+							<CategorySidebar />
 						</div>
 
-						{/* Overlay para mobile - apenas se a sidebar estiver aberta */}
 						{sidebarOpen && (
 							<div
 								className="lg:hidden fixed inset-0 top-[56px] bg-black bg-opacity-50 z-30 backdrop-blur-sm"
 								onClick={toggleSidebar}
 							></div>
 						)}
+						*/}
 					</>
 				)}
 
-				{/* Main content - ajusta a largura com base na presença da sidebar */}
+				{/* Main content - agora com largura total já que a sidebar está desativada */}
 				<main
-					className={`flex-1 px-4 py-6 md:px-6 overflow-y-auto ${
-						hideSidebar ? 'w-full' : ''
-					}`}
+					className="flex-1 px-4 py-6 md:px-6 overflow-y-auto w-full"
 				>
 					<div className="max-w-7xl mx-auto w-full">
 						<AnimatePresence mode="wait">
