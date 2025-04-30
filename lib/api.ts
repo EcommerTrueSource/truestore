@@ -61,7 +61,7 @@ export async function fetchProducts({
     
     // Aplicar filtro por categoria
       if (categoryId && categoryId !== 'all') {
-        params.categoryId = categoryId;
+        params.category = categoryId;
       }
       
     // Aplicar ordenação
@@ -695,7 +695,8 @@ export async function fetchProductsByCategory({
         console.log('[API] Categoria Proteínas detectada, incluindo ambos os IDs conhecidos');
         params.categoryIds = JSON.stringify(['8bb26b67-a7ce-4001-ae51-ceec0082fb89', '8fade785-4ad2-4f53-b715-c4a662dd6be6']);
       } else {
-        params.categoryId = categoryId;
+        // Usar 'category' em vez de 'categoryId' para corresponder ao backend
+        params.category = categoryId;
       }
       console.log(`[API] Filtrando por categoria: ${categoryId}`);
     }

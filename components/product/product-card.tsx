@@ -30,6 +30,7 @@ import {
 	AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 interface ProductCardProps {
 	product: Product;
@@ -52,6 +53,7 @@ export function ProductCard({
 	const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
 	const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
 	const router = useRouter();
+	const searchParams = useSearchParams();
 
 	const isProductFavorite = isFavorite(product.id);
 	const cartItem = cartItems.find((item) => item.id === product.id);
@@ -307,22 +309,18 @@ export function ProductCard({
 								: 'translate-y-2 opacity-0'
 						}`}
 					>
-						<Badge
-							variant="outline"
-							className="bg-white/80 backdrop-blur-sm text-xs font-medium text-gray-700 border-0 cursor-pointer hover:bg-white/90"
-							onClick={(e) => {
-								e.preventDefault();
-								e.stopPropagation();
-								if (productCategory.id) {
-									const params = new URLSearchParams();
-									params.set('category', productCategory.id);
-									params.set('categoryName', productCategory.name);
-									router.push(`/store?${params.toString()}`);
-								}
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => {
+								const params = new URLSearchParams(searchParams.toString());
+								params.set('category', productCategory.id);
+								router.push(`/store?${params.toString()}`);
 							}}
+							className="h-7 text-xs gap-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800"
 						>
 							{getCategoryName()}
-						</Badge>
+						</Button>
 					</div>
 
 					{/* Cart count badge */}
@@ -377,7 +375,6 @@ export function ProductCard({
 											e.stopPropagation();
 											const params = new URLSearchParams();
 											params.set('category', productCategory.id);
-											params.set('categoryName', productCategory.name);
 											router.push(`/store?${params.toString()}`);
 										}}
 									>

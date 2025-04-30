@@ -60,8 +60,6 @@ export function CategorySidebar() {
 			console.log('[Sidebar] Selecionada categoria: Todos os produtos');
 		} else {
 			params.set('category', categoryId);
-			// Sempre adicionar o nome da categoria para filtro correto na API
-			params.set('categoryName', categoryName || '');
 			console.log(
 				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId})`
 			);
