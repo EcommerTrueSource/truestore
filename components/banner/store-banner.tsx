@@ -55,11 +55,32 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 						'Accept': 'application/json',
 						'Authorization': `Bearer ${token}`,
 					},
-					next: { revalidate: 60 }, // Cache por 1 minuto
+					cache: 'no-cache', // Desativar cache para garantir dados atualizados
 				});
+
+				console.log(`[StoreBanner] Status da resposta: ${response.status}`);
+				
+				// Log detalhado dos cabeçalhos de resposta para debug
+				const headers: Record<string, string> = {};
+				response.headers.forEach((value, key) => {
+					headers[key] = value;
+				});
+				console.log(`[StoreBanner] Cabeçalhos de resposta:`, headers);
 
 				if (!response.ok) {
 					console.error(`[StoreBanner] Erro HTTP: ${response.status}`);
+					
+					// Tentar obter mensagem de erro do corpo
+					let errorMsg = '';
+					try {
+						const errorData = await response.json();
+						errorMsg = errorData.message || errorData.error || 'Erro desconhecido';
+						console.error(`[StoreBanner] Mensagem de erro: ${errorMsg}`);
+					} catch (e) {
+						// Se não for JSON, tentar obter como texto
+						errorMsg = await response.text();
+						console.error(`[StoreBanner] Corpo do erro (não-JSON): ${errorMsg.substring(0, 200)}...`);
+					}
 					
 					// Tentar novamente se for erro de autenticação
 					if ((response.status === 401 || response.status === 403) && retryCount < maxRetries) {
@@ -69,17 +90,39 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 						return;
 					}
 					
-					throw new Error(`Erro ${response.status} ao buscar banner`);
+					throw new Error(`Erro ${response.status} ao buscar banner: ${errorMsg}`);
 				}
 
-				// Obter dados JSON da resposta com tratamento de erro apropriado
+				// Obter dados da resposta com tratamento robusto
+				let data;
 				const contentType = response.headers.get('content-type');
+				console.log(`[StoreBanner] Content-Type: ${contentType}`);
+				
 				if (!contentType || !contentType.includes('application/json')) {
 					console.error('[StoreBanner] Resposta não é JSON:', contentType);
-					throw new Error('Resposta não é do tipo JSON');
+					
+					// Tentar processar como JSON mesmo assim
+					const text = await response.text();
+					console.log(`[StoreBanner] Tentando processar texto como JSON. Conteúdo: ${text.substring(0, 200)}`);
+					
+					// Verificar se o texto parece ser JSON
+					if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+						try {
+							data = JSON.parse(text);
+							console.log(`[StoreBanner] Consegui converter texto para JSON:`, data);
+						} catch (e) {
+							console.error(`[StoreBanner] Falha ao converter texto para JSON:`, e);
+							throw new Error('Resposta não é do tipo JSON válido');
+						}
+					} else {
+						console.error(`[StoreBanner] Conteúdo não parece ser JSON`);
+						throw new Error('Resposta não é do tipo JSON');
+					}
+				} else {
+					// Processar normalmente como JSON
+					data = await response.json();
+					console.log(`[StoreBanner] Dados JSON recebidos:`, data);
 				}
-
-				const data = await response.json();
 				
 				// Verificar se a resposta contém uma URL de banner válida
 				if (data && data.imageUrl) {
@@ -89,12 +132,12 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 						setError(false);
 					}
 				} else {
-					console.warn('[StoreBanner] Resposta não contém URL de banner válida');
+					console.warn('[StoreBanner] Resposta não contém URL de banner válida:', data);
 					if (mounted) {
 						setError(true);
 					}
 				}
-			} catch (error) {
+			} catch (error: any) {
 				console.error('[StoreBanner] Erro ao buscar banner:', error);
 				if (mounted) {
 					setError(true);
