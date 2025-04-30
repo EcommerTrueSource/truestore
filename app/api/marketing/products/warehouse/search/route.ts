@@ -17,6 +17,7 @@ import { TrueCore } from '@/lib/true-core-proxy';
  * - page: number - Página de resultados (default: 0)
  * - limit: number - Limite de resultados por página (default: 12)
  * - term: string - Termo para busca de produtos (opcional)
+ * - category: string - ID da categoria para filtrar produtos (opcional)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -43,6 +44,9 @@ export async function GET(request: NextRequest) {
     // Copiar os parâmetros de consulta da requisição original
     const searchParams = new URLSearchParams(request.nextUrl.searchParams.toString());
     
+    // Log de todos os parâmetros recebidos para diagnóstico
+    console.log(`[TrueCore] Parâmetros recebidos: ${JSON.stringify(Object.fromEntries(searchParams.entries()))}`);
+    
     // Remover parâmetro 'categoryName' se existir, pois não é mais necessário
     if (searchParams.has('categoryName')) {
       console.log(`[TrueCore] Removendo parâmetro 'categoryName' obsoleto`);
@@ -59,14 +63,14 @@ export async function GET(request: NextRequest) {
       searchParams.delete('categoryId'); // Remover o original
     }
     
+    // Garantir que o parâmetro 'category' seja mantido se já estiver presente
+    if (searchParams.has('category')) {
+      console.log(`[TrueCore] Usando categoria com ID: ${searchParams.get('category')}`);
+    }
+    
     // Adicionar/garantir filtros padrão se não estiverem presentes
     if (!searchParams.has('inStock')) searchParams.set('inStock', 'true');
     if (!searchParams.has('active')) searchParams.set('active', 'true');
-    
-    // Log para categoria, se presente
-    if (searchParams.has('category')) {
-      console.log(`[TrueCore] Filtrando por ID de categoria: ${searchParams.get('category')}`);
-    }
     
     // Garantir que temos o parâmetro warehouseName
     if (!searchParams.has('warehouseName')) {
@@ -93,10 +97,9 @@ export async function GET(request: NextRequest) {
             searchParams.delete('categoryIds');
             
             // Adicionar o primeiro ID como categoryId principal
-            searchParams.set('categoryId', categoryIds[0]);
-            
-            // Se houver mais IDs, podemos adicionar como parâmetros adicionais
-            // ou implementar lógica específica para a API do True Core
+            if (!searchParams.has('category')) {
+              searchParams.set('category', categoryIds[0]);
+            }
           }
         }
       } catch (e) {
@@ -142,7 +145,13 @@ export async function GET(request: NextRequest) {
     
     // Log de informações sobre os produtos obtidos
     if (data && data.data && Array.isArray(data.data)) {
-      console.log(`[TrueCore] ${data.data.length} produtos obtidos com sucesso`);
+      console.log(`[TrueCore] ${data.data.length} produtos obtidos com sucesso do warehouse`);
+      
+      // Log específico para categoria, se aplicável
+      if (searchParams.has('category')) {
+        const categoryId = searchParams.get('category');
+        console.log(`[TrueCore] Filtro por categoria ${categoryId}: ${data.data.filter((p: any) => p.categoryId === categoryId || (p.category && p.category.id === categoryId)).length} produtos correspondem diretamente`);
+      }
     }
     
     return Response.json(data);

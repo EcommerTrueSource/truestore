@@ -61,8 +61,11 @@ export function CategorySidebar() {
 			console.log('[Sidebar] Selecionada categoria: Todos os produtos');
 		} else {
 			params.set('category', categoryId);
+			if (categoryName) {
+				params.set('categoryName', categoryName);
+			}
 			console.log(
-				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId}). Usando endpoint com category=${categoryId}. O parâmetro será enviado para a API.`
+				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId}). Usando endpoint com category=${categoryId}. Este parâmetro será passado para a API.`
 			);
 		}
 		router.push(`${pathname}?${params.toString()}`);

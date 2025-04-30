@@ -1350,6 +1350,7 @@ export async function searchProductsByTerm({
  * @param inStock Filtrar apenas produtos em estoque (default: true)
  * @param active Filtrar apenas produtos ativos (default: true)
  * @param term Termo para pesquisa de produtos (opcional)
+ * @param category ID da categoria para filtrar produtos (opcional)
  */
 export async function searchWarehouseProducts({
   warehouseName = 'MKT-Creator',
@@ -1369,6 +1370,10 @@ export async function searchWarehouseProducts({
   category?: string;
 } = {}) {
   try {
+    console.log(`[API] Buscando produtos no warehouse ${warehouseName} com parâmetros: ${JSON.stringify({
+      page, limit, inStock, active, term, category
+    })}`);
+
     const queryParams = new URLSearchParams({
       warehouseName: warehouseName,
       page: page.toString(),
@@ -1390,7 +1395,10 @@ export async function searchWarehouseProducts({
     }
 
     // Utilizar a rota específica para busca de produtos por warehouse
-    const response = await fetch(`/api/marketing/products/warehouse/search?${queryParams.toString()}`, {
+    const url = `/api/marketing/products/warehouse/search?${queryParams.toString()}`;
+    console.log(`[API] Executando requisição para: ${url}`);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -1401,14 +1409,29 @@ export async function searchWarehouseProducts({
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('Erro ao buscar produtos do warehouse:', error);
+      console.error('[API] Erro ao buscar produtos do warehouse:', error);
       throw new Error(`Erro ao buscar produtos (${response.status}): ${error}`);
     }
 
     const data = await response.json();
+    
+    // Log dos resultados para diagnóstico
+    if (data && data.data && Array.isArray(data.data)) {
+      console.log(`[API] Recebidos ${data.data.length} produtos do warehouse ${warehouseName}`);
+      
+      // Se há categoria, verificar quantos produtos correspondem diretamente
+      if (category) {
+        const matchingProducts = data.data.filter((p: any) => 
+          p.categoryId === category || 
+          (p.category && p.category.id === category)
+        );
+        console.log(`[API] Produtos da categoria ${category}: ${matchingProducts.length} de ${data.data.length} (${Math.round(matchingProducts.length/data.data.length*100)}%)`);
+      }
+    }
+    
     return data;
   } catch (error) {
-    console.error('Erro ao buscar produtos do warehouse:', error);
+    console.error('[API] Erro ao buscar produtos do warehouse:', error);
     throw error;
   }
 }

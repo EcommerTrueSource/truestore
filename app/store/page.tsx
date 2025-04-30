@@ -590,9 +590,11 @@ export default function StorePage() {
 					inStock: true,
 					active: true,
 					term: search, // Usar o termo de busca como parâmetro term
-					category: category, // Adicionar o ID da categoria para filtrar
+					category: category, // Passar o ID da categoria diretamente
 					...extraParams, // Adicionar parâmetros extras
 				});
+				
+				console.log(`[Store] Resposta da API recebida com sucesso. Produtos totais: ${response?.data?.length || 0}`);
 			} catch (apiError) {
 				console.error('[Store] Erro ao buscar produtos:', apiError);
 
@@ -633,17 +635,16 @@ export default function StorePage() {
 				codigo: item.sku || '',
 				unidade: item.unit || 'UN',
 				active: item.active || true,
+				// Preservar informações de estoque do warehouse se disponíveis
+				warehouseStock: item.warehouseStock || undefined
 			}));
 
-			// Filtrar produtos pela categoria selecionada (se houver)
+			// A filtragem de categoria agora é feita no backend, não precisamos filtrar novamente
 			let filteredProducts = productsData;
+			
+			// Apenas para depuração, calcular quantos produtos correspondem à categoria selecionada
 			if (category && category !== 'all') {
-				console.log(
-					`[Store] Filtrando ${productsData.length} produtos pelo categoryId: ${category}`
-				);
-
-				// Verificar produtos que correspondem à categoria selecionada
-				filteredProducts = productsData.filter((product: Product) => {
+				const categoryMatchCount = productsData.filter((product: Product) => {
 					// Verificar no categoryId do produto
 					if (product.categoryId === category) {
 						return true;
@@ -654,167 +655,10 @@ export default function StorePage() {
 						return true;
 					}
 
-					// Caso especial: categoria Proteínas tem dois IDs possíveis
-					if (
-						category === '8bb26b67-a7ce-4001-ae51-ceec0082fb89' &&
-						(product.categoryId === '8fade785-4ad2-4f53-b715-c4a662dd6be6' ||
-							(product.category &&
-								product.category.id === '8fade785-4ad2-4f53-b715-c4a662dd6be6'))
-					) {
-						return true;
-					}
-
 					return false;
-				});
-
-				console.log(
-					`[Store] Filtrados ${filteredProducts.length} produtos da categoria ${category}`
-				);
-
-				// Se estamos na primeira página e temos poucos produtos após filtragem,
-				// carregar mais páginas para tentar encontrar mais produtos da categoria
-				if (
-					!append &&
-					filteredProducts.length < 4 &&
-					productsData.length === PRODUCTS_PER_PAGE
-				) {
-					console.log(
-						'[Store] Poucos produtos da categoria encontrados, carregando mais...'
-					);
-					setIsLoadingCategory(true);
-
-					// Carregar mais páginas de forma assíncrona
-					const loadMoreForCategory = async () => {
-						let allProducts = [...productsData];
-						let currentPage = 2; // Começar na página 2 (já carregamos a 1)
-						let hasMorePages = true;
-						const maxPages = 10; // Limite para evitar loops infinitos
-
-						while (hasMorePages && currentPage <= maxPages) {
-							try {
-								// Carregar a próxima página
-								console.log(
-									`[Store] Carregando página ${currentPage} para buscar mais produtos da categoria ${category}`
-								);
-
-								const nextPageResponse = await searchWarehouseProducts({
-									warehouseName: warehouseName,
-									page: currentPage - 1, // API usa base 0
-									limit: PRODUCTS_PER_PAGE,
-									inStock: true,
-									active: true,
-									term: search,
-									category: category, // Adicionar a categoria para filtrar
-								});
-
-								// Verificar se temos resultados
-								if (
-									nextPageResponse &&
-									nextPageResponse.data &&
-									Array.isArray(nextPageResponse.data)
-								) {
-									// Processar os produtos
-									const nextPageProducts = nextPageResponse.data.map(
-										(item: any) => ({
-											id: item.sku || item.tinyId || item.id,
-											name: item.name,
-											description: item.description || '',
-											price: item.price || 0,
-											originalPrice: item.originalPrice || item.price || 0,
-											imageUrl:
-												Array.isArray(item.images) && item.images.length > 0
-													? item.images[0]
-													: item.imageUrl || '/placeholder-product.png',
-											categoryId: item.categoryId || '',
-											category: item.category || undefined,
-											codigo: item.sku || '',
-											unidade: item.unit || 'UN',
-											active: item.active || true,
-										})
-									);
-
-									// Adicionar à lista total
-									allProducts = [...allProducts, ...nextPageProducts];
-
-									// Verificar se temos mais páginas
-									hasMorePages = nextPageProducts.length === PRODUCTS_PER_PAGE;
-
-									// Filtrar novamente com todos os produtos acumulados
-									const newFilteredProducts = allProducts.filter(
-										(product: Product) => {
-											if (product.categoryId === category) return true;
-											if (product.category && product.category.id === category)
-												return true;
-											if (
-												category === '8bb26b67-a7ce-4001-ae51-ceec0082fb89' &&
-												(product.categoryId ===
-													'8fade785-4ad2-4f53-b715-c4a662dd6be6' ||
-													(product.category &&
-														product.category.id ===
-															'8fade785-4ad2-4f53-b715-c4a662dd6be6'))
-											) {
-												return true;
-											}
-											return false;
-										}
-									);
-
-									// Se já temos produtos suficientes, parar a busca
-									if (newFilteredProducts.length >= 8) {
-										console.log(
-											`[Store] Encontrados ${newFilteredProducts.length} produtos da categoria após busca adicional`
-										);
-										setProducts(newFilteredProducts);
-										setIsLoadingCategory(false);
-										break;
-									}
-
-									// Se não encontramos produtos suficientes, continuar buscando
-									currentPage++;
-								} else {
-									// Não há mais páginas
-									hasMorePages = false;
-								}
-							} catch (error) {
-								console.error(
-									`[Store] Erro ao carregar página adicional ${currentPage}:`,
-									error
-								);
-								hasMorePages = false;
-							}
-						}
-
-						// Após todas as tentativas, atualizar a lista com o que encontramos
-						const finalFilteredProducts = allProducts.filter(
-							(product: Product) => {
-								if (product.categoryId === category) return true;
-								if (product.category && product.category.id === category)
-									return true;
-								if (
-									category === '8bb26b67-a7ce-4001-ae51-ceec0082fb89' &&
-									(product.categoryId ===
-										'8fade785-4ad2-4f53-b715-c4a662dd6be6' ||
-										(product.category &&
-											product.category.id ===
-												'8fade785-4ad2-4f53-b715-c4a662dd6be6'))
-								) {
-									return true;
-								}
-								return false;
-							}
-						);
-
-						console.log(
-							`[Store] Finalizada busca adicional, encontrados ${finalFilteredProducts.length} produtos da categoria`
-						);
-						setProducts(finalFilteredProducts);
-						setIsLoading(false);
-						setIsLoadingCategory(false);
-					};
-
-					// Iniciar o carregamento adicional, permitindo que a UI atualize com os resultados iniciais
-					loadMoreForCategory();
-				}
+				}).length;
+				
+				console.log(`[Store] Correspondência de categoria (apenas log): ${categoryMatchCount} de ${productsData.length} produtos correspondem à categoria ${category}`);
 			}
 
 			// Se estamos anexando a uma lista existente, mesclar resultados
