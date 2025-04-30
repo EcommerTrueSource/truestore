@@ -366,7 +366,7 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 							</Link>
 						</DropdownMenuItem>
 
-						<DropdownMenuItem
+						{/* <DropdownMenuItem
 							asChild
 							className="flex items-center cursor-pointer p-2"
 						>
@@ -374,7 +374,7 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 								<HelpCircle className="mr-2 h-4 w-4" />
 								<span>Ajuda</span>
 							</Link>
-						</DropdownMenuItem>
+						</DropdownMenuItem> */}
 					</DropdownMenuGroup>
 
 					<DropdownMenuSeparator />
