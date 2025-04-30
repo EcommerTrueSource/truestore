@@ -14,65 +14,122 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 	const [error, setError] = useState<boolean>(false);
 
 	useEffect(() => {
+		let mounted = true;
+		const maxRetries = 3;
+		let retryCount = 0;
+		
 		const fetchBanner = async () => {
+			if (!mounted) return;
+			
 			try {
 				setIsLoading(true);
+				setError(false);
+				
+				// Retry com delay se não for a primeira tentativa
+				if (retryCount > 0) {
+					console.log(`[StoreBanner] Tentativa #${retryCount+1} de obter o banner...`);
+					await new Promise(resolve => setTimeout(resolve, 1000));
+				}
 
 				// Verificar se temos um token válido
 				if (!tokenStore.hasValidToken()) {
-					console.error(
-						'[StoreBanner] Token inválido, não é possível obter o banner'
-					);
-					setError(true);
-					setIsLoading(false);
-					return;
+					console.warn('[StoreBanner] Token não encontrado ou inválido');
+					
+					if (retryCount < maxRetries) {
+						retryCount++;
+						setTimeout(fetchBanner, 1500);
+						return;
+					}
+					
+					throw new Error('Token inválido após várias tentativas');
 				}
 
 				// Obter o token para a chamada
 				const token = tokenStore.getToken();
+				console.log('[StoreBanner] Token obtido, buscando banner...');
 
 				const response = await fetch('/api/marketing/campaign/banner', {
 					method: 'GET',
 					headers: {
 						'Content-Type': 'application/json',
-						Accept: 'application/json',
-						Authorization: `Bearer ${token}`,
+						'Accept': 'application/json',
+						'Authorization': `Bearer ${token}`,
 					},
+					cache: 'no-store',
 					credentials: 'include',
 				});
 
 				if (!response.ok) {
-					console.error(
-						`[StoreBanner] Erro ao buscar banner: ${response.status}`
-					);
-					setError(true);
-					setIsLoading(false);
-					return;
+					console.error(`[StoreBanner] Erro HTTP: ${response.status}`);
+					
+					// Tentar novamente se for erro de autenticação
+					if (response.status === 401 && retryCount < maxRetries) {
+						console.warn('[StoreBanner] Erro 401, tentando novamente...');
+						retryCount++;
+						setTimeout(fetchBanner, 1500);
+						return;
+					}
+					
+					throw new Error(`Erro ${response.status} ao buscar banner`);
 				}
 
-				const data = await response.json();
+				// Tentar processar a resposta com tratamento de erro robusto
+				let data;
+				try {
+					const responseText = await response.text();
+					
+					// Verificar se o texto parece ser JSON válido antes de fazer parse
+					if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
+						data = JSON.parse(responseText);
+					} else {
+						console.error('[StoreBanner] Resposta não é JSON válido:', responseText.substring(0, 100));
+						throw new Error('Resposta inválida do servidor');
+					}
+				} catch (parseError) {
+					console.error('[StoreBanner] Erro ao processar resposta JSON:', parseError);
+					
+					// Tentar novamente em caso de erro de parsing
+					if (retryCount < maxRetries) {
+						retryCount++;
+						setTimeout(fetchBanner, 1500);
+						return;
+					}
+					
+					throw parseError;
+				}
 
 				// Verificar se a resposta contém uma URL de banner válida
 				if (data && data.imageUrl) {
-					console.log(
-						`[StoreBanner] Banner obtido com sucesso: ${data.imageUrl}`
-					);
-					setBannerUrl(data.imageUrl);
+					console.log(`[StoreBanner] Banner obtido com sucesso: ${data.imageUrl}`);
+					if (mounted) {
+						setBannerUrl(data.imageUrl);
+						setError(false);
+					}
 				} else {
-					console.warn(
-						'[StoreBanner] Resposta não contém URL de banner válida'
-					);
-					setError(true);
+					console.warn('[StoreBanner] Resposta não contém URL de banner válida');
+					if (mounted) {
+						setError(true);
+					}
 				}
 			} catch (error) {
 				console.error('[StoreBanner] Erro ao buscar banner:', error);
-				setError(true);
+				if (mounted) {
+					setError(true);
+				}
 			} finally {
-				setIsLoading(false);
+				if (mounted) {
+					setIsLoading(false);
+				}
 			}
 		};
 
+		// Iniciar o processo de busca do banner
 		fetchBanner();
+		
+		// Cleanup function
+		return () => {
+			mounted = false;
+		};
 	}, []);
 
 	return (
