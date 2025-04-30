@@ -85,8 +85,8 @@ export async function GET(request: NextRequest) {
     if (!searchParams.has('page')) searchParams.set('page', '0');
     if (!searchParams.has('limit')) searchParams.set('limit', '12');
     
-    // Adicionar timestamp para evitar cache
-    searchParams.set('_t', Date.now().toString());
+    // Verificar se devemos ignorar cache com base em parâmetros _t ou _nocache
+    const skipCache = searchParams.has('_t') || searchParams.has('_nocache');
     
     // Tratar parâmetro especial categoryIds (array de IDs de categoria)
     if (searchParams.has('categoryIds')) {
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      next: { revalidate: 0 } // Não usar cache
+      next: skipCache ? { revalidate: 0 } : { revalidate: 60 } // Configuração de cache baseada nos parâmetros
     });
 
     // Se a resposta não for ok, retornar o erro

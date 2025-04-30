@@ -1351,6 +1351,7 @@ export async function searchProductsByTerm({
  * @param active Filtrar apenas produtos ativos (default: true)
  * @param term Termo para pesquisa de produtos (opcional)
  * @param category ID da categoria para filtrar produtos (opcional)
+ * @param skipCache Flag para forçar ignorar o cache (opcional)
  */
 export async function searchWarehouseProducts({
   warehouseName = 'MKT-Creator',
@@ -1359,7 +1360,8 @@ export async function searchWarehouseProducts({
   inStock = true,
   active = true,
   term = '',
-  category = ''
+  category = '',
+  skipCache = false
 }: {
   warehouseName?: string;
   page?: number;
@@ -1368,6 +1370,7 @@ export async function searchWarehouseProducts({
   active?: boolean;
   term?: string;
   category?: string;
+  skipCache?: boolean;
 } = {}) {
   try {
     console.log(`[API] Buscando produtos no warehouse ${warehouseName} com parâmetros: ${JSON.stringify({
@@ -1395,8 +1398,10 @@ export async function searchWarehouseProducts({
       console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName} (usando PostgreSQL primeiro)`);
     }
 
-    // Adicionar timestamp para evitar cache
-    queryParams.append('_t', Date.now().toString());
+    // Adicionar timestamp apenas se skipCache for true
+    if (skipCache) {
+      queryParams.append('_t', Date.now().toString());
+    }
 
     // Utilizar a rota específica para busca de produtos por warehouse
     const url = `/api/marketing/products/warehouse/search?${queryParams.toString()}`;
@@ -1409,7 +1414,9 @@ export async function searchWarehouseProducts({
         'Accept': 'application/json'
       },
       credentials: 'include',
-      cache: 'no-store' // Não usar cache
+      // Usar cache com revalidação padrão do Next.js
+      cache: skipCache ? 'no-store' : 'default',
+      next: skipCache ? undefined : { revalidate: 60 } // Revalidar a cada 60 segundos se não estiver ignorando cache
     });
 
     if (!response.ok) {

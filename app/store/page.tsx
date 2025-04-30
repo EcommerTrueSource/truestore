@@ -579,6 +579,9 @@ export default function StorePage() {
 				}`
 			);
 
+			// Determinar se devemos ignorar o cache
+			const skipCache = append || currentPage > 1;
+
 			// Usar warehouse específico com base nas configurações
 			let response;
 			try {
@@ -591,6 +594,7 @@ export default function StorePage() {
 					active: true,
 					term: search, // Usar o termo de busca como parâmetro term
 					category: category, // Passar o ID da categoria diretamente
+					skipCache: skipCache, // Ignorar cache apenas quando necessário
 					...extraParams, // Adicionar parâmetros extras
 				});
 				
@@ -802,7 +806,7 @@ export default function StorePage() {
 		};
 	}, [hasMore, isLoadingMore, loadMoreProducts, pageReady]);
 
-	// Carregar produtos quando a página estiver pronta
+	// Efeito para carregar produtos quando parâmetros de consulta mudam
 	useEffect(() => {
 		if (!pageReady) return;
 
@@ -810,8 +814,15 @@ export default function StorePage() {
 		const hasToken = tokenStore.hasValidToken();
 
 		if (hasToken) {
-			console.log('[StorePage] Token encontrado, carregando produtos...');
-			loadProducts(1, false);
+			// Evitar carregar quando já temos produtos e não houve mudança nos parâmetros relevantes
+			const shouldReload = searchQuery || categoryId || loadAttempts === 0;
+			
+			if (shouldReload) {
+				console.log('[StorePage] Parâmetros de consulta alterados, recarregando produtos...');
+				loadProducts(1, false);
+			} else {
+				console.log('[StorePage] Parâmetros não mudaram, evitando recarga desnecessária');
+			}
 		} else if (loadAttempts < maxLoadAttempts) {
 			// Se não temos token e ainda não tentamos muitas vezes, aguardar e tentar novamente
 			console.log(
@@ -834,14 +845,9 @@ export default function StorePage() {
 			);
 			setIsLoading(false);
 		}
-	}, [pageReady, searchQuery, sortOrder, categoryId, loadAttempts]);
-
-	// Redirecionamento para login se não estiver autenticado
-	useEffect(() => {
-		if (!isAuthenticated && !tokenStore.hasValidToken() && !isLoading) {
-			router.push('/login');
-		}
-	}, [router, isAuthenticated, isLoading]);
+		// Remover sortOrder das dependências para evitar recargas desnecessárias
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [pageReady, searchQuery, categoryId, loadAttempts]);
 
 	// Efeito para recarregar os produtos quando o warehouse mudar
 	useEffect(() => {
@@ -852,7 +858,15 @@ export default function StorePage() {
 			);
 			loadProducts(1, false);
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [warehouseName, pageReady]);
+
+	// Redirecionamento para login se não estiver autenticado
+	useEffect(() => {
+		if (!isAuthenticated && !tokenStore.hasValidToken() && !isLoading) {
+			router.push('/login');
+		}
+	}, [router, isAuthenticated, isLoading]);
 
 	return (
 		<StoreLayout hideSidebar={!pageReady}>
