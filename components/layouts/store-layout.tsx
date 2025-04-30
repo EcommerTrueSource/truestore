@@ -158,7 +158,7 @@ export default function StoreLayout({
 								${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
 							`}
 						>
-							<CategorySidebar />
+							{/* <CategorySidebar /> */}
 						</div>
 
 						{/* Overlay para mobile - apenas se a sidebar estiver aberta */}
