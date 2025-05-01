@@ -1450,3 +1450,63 @@ export async function searchWarehouseProducts({
     throw error;
   }
 }
+
+/**
+ * Busca contagem de produtos por categoria em um depósito específico
+ * @param warehouseName Nome do depósito (default: MKT-Creator)
+ * @param skipCache Flag para ignorar cache (default: false)
+ * @returns Objeto com totais e categorias com contagens
+ */
+export async function fetchCategoryCounts(warehouseName?: string, skipCache: boolean = false): Promise<any> {
+  try {
+    console.log(`[API] Buscando contagem de produtos por categoria do depósito ${warehouseName || 'MKT-Creator'}`);
+    
+    // Construir URL base
+    const baseUrl = '/api/marketing/products/warehouse/categories/count';
+    
+    // Construir parâmetros de consulta
+    const params: Record<string, string> = {
+      inStock: 'true',
+      active: 'true'
+    };
+    
+    // Adicionar warehouse se fornecido
+    if (warehouseName) {
+      params.warehouseName = warehouseName;
+    } else {
+      params.warehouseName = 'MKT-Creator'; // Valor padrão
+    }
+    
+    // Adicionar parâmetro para ignorar cache se necessário
+    if (skipCache) {
+      params._t = Date.now().toString();
+    }
+    
+    // Construir URL com parâmetros
+    const queryString = new URLSearchParams(params).toString();
+    const url = `${baseUrl}?${queryString}`;
+    
+    console.log(`[API] Fazendo requisição para: ${url}`);
+    
+    // Fazer a requisição
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error(`[API] Erro ao buscar contagens de categorias: ${response.status} - ${response.statusText}`);
+      throw new Error(`Erro ao buscar contagens de categorias: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    console.log(`[API] Recebidas ${data.categories?.length || 0} categorias com contagens`);
+    return data;
+  } catch (error) {
+    console.error('[API] Erro ao buscar contagens de categorias:', error);
+    throw error;
+  }
+}

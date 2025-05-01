@@ -9,7 +9,7 @@ import React, {
 	useRef,
 } from 'react';
 import type { Category } from '@/types/category';
-import { fetchCategories } from '@/lib/api';
+import { fetchCategories, fetchCategoryCounts } from '@/lib/api';
 import { useAuth } from './auth-context';
 import { tokenStore } from '@/lib/token-store';
 
@@ -18,6 +18,7 @@ export interface CategoriesContextType {
 	isLoading: boolean;
 	error: string | null;
 	reload: () => void;
+	updateCategoryCounts: (warehouseName: string) => void;
 }
 
 // Tempo mínimo (em ms) entre carregamentos de categorias
@@ -28,6 +29,7 @@ const CategoriesContext = createContext<CategoriesContextType>({
 	isLoading: true,
 	error: null,
 	reload: () => {},
+	updateCategoryCounts: () => {},
 });
 
 // Chave para armazenar categorias no localStorage
@@ -49,6 +51,9 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 	const isLoadingRef = useRef(false);
 	const lastLoadTimeRef = useRef(0);
 	const pendingLoadRef = useRef<NodeJS.Timeout | null>(null);
+	
+	// Referência para o warehouseName atual
+	const warehouseNameRef = useRef<string>('MKT-Creator');
 
 	// Função para carregar categorias que pode ser chamada explicitamente
 	const loadCategories = async (force = false) => {
@@ -328,11 +333,89 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 		}
 	};
 
+	/**
+	 * Atualiza as contagens de produtos por categoria com base no depósito especificado
+	 * @param warehouseName Nome do depósito para buscar as contagens
+	 */
+	const updateCategoryCounts = async (warehouseName: string) => {
+		if (!warehouseName) {
+			console.warn('[Categories] Nome do depósito não fornecido para atualizar contagens');
+			return;
+		}
+
+		console.log(`[Categories] Atualizando contagens de produtos para depósito: ${warehouseName}`);
+		setIsLoading(true);
+
+		try {
+			// Buscar contagens de categorias usando o novo endpoint
+			const result = await fetchCategoryCounts(warehouseName, true);
+			
+			if (result && result.categories && Array.isArray(result.categories)) {
+				console.log(`[Categories] Recebidas ${result.categories.length} categorias com contagens para o depósito ${warehouseName}`);
+				
+				// Atualizar o estado com as categorias e suas contagens
+				setCategories(result.categories);
+			} else {
+				console.warn('[Categories] Resposta inválida ao buscar contagens de categorias:', result);
+			}
+		} catch (error: unknown) {
+			console.error('[Categories] Erro ao atualizar contagens de produtos por categoria:', error);
+			const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+			setError(`Erro ao atualizar contagens: ${errorMessage}`);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+	
+	// Efeito para detectar mudanças no warehouse salvo no localStorage
+	useEffect(() => {
+		// Evitar execução no SSR
+		if (typeof window === 'undefined') return;
+		
+		// Verificar inicialmente e carregar contagens
+		const checkWarehouse = () => {
+			const savedWarehouse = localStorage.getItem('warehouse_name');
+			if (savedWarehouse && savedWarehouse !== warehouseNameRef.current) {
+				console.log(`[CATEGORIES] Warehouse alterado para ${savedWarehouse}, atualizando contagens`);
+				updateCategoryCounts(savedWarehouse);
+			}
+		};
+		
+		// Executar verificação inicial
+		checkWarehouse();
+		
+		// Configurar o listener para as mudanças de warehouse
+		const handleStorageChange = (event: StorageEvent) => {
+			if (event.key === 'warehouse_name' && event.newValue) {
+				if (event.newValue !== warehouseNameRef.current) {
+					console.log(`[CATEGORIES] Warehouse alterado para ${event.newValue} via localStorage`);
+					updateCategoryCounts(event.newValue);
+				}
+			}
+		};
+		
+		// Adicionar listener para mudanças no localStorage
+		window.addEventListener('storage', handleStorageChange);
+		
+		// Remover listener ao desmontar
+		return () => {
+			window.removeEventListener('storage', handleStorageChange);
+		};
+	}, [categories]);
+
 	// Função de recarga exposta no contexto
 	const reload = () => {
-		console.log('[CategoriesProvider] Recarregando categorias...');
-		setRetryCount(0); // Resetar contagem de tentativas
+		console.log('[CATEGORIES] Recarregando categorias...');
 		loadCategories(true);
+		
+		// Também atualizar as contagens se tivermos um warehouse definido
+		if (typeof window !== 'undefined') {
+			const savedWarehouse = localStorage.getItem('warehouse_name');
+			if (savedWarehouse) {
+				console.log(`[CATEGORIES] Também atualizando contagens para ${savedWarehouse}`);
+				updateCategoryCounts(savedWarehouse);
+			}
+		}
 	};
 
 	// Função de debounce para eventos que disparam carregamento de categorias
@@ -537,6 +620,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 				isLoading,
 				error,
 				reload,
+				updateCategoryCounts,
 			}}
 		>
 			{children}

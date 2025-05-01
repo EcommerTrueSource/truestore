@@ -258,7 +258,7 @@ export default function StorePage() {
 	const [page, setPage] = useState(1);
 	const [hasMore, setHasMore] = useState(false);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	const { categories } = useCategories();
+	const { categories, updateCategoryCounts } = useCategories();
 	const { isAuthenticated } = useAuth();
 	const router = useRouter();
 	const loaderRef = useRef<HTMLDivElement>(null);
@@ -860,6 +860,25 @@ export default function StorePage() {
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [warehouseName, pageReady]);
+
+	// Efeito para atualizar contagens de categorias quando o depósito muda
+	useEffect(() => {
+		if (warehouseName && updateCategoryCounts) {
+			console.log(`[Store] Atualizando contagens de categorias para o depósito: ${warehouseName}`);
+			updateCategoryCounts(warehouseName);
+		}
+	}, [warehouseName, updateCategoryCounts]);
+	
+	// Efeito para atualizar contagens quando a página é carregada
+	useEffect(() => {
+		if (!pageReady) return;
+		
+		const savedWarehouse = localStorage.getItem('warehouse_name');
+		if (savedWarehouse) {
+			console.log(`[StorePage] Atualizando contagens de categorias para o depósito ${savedWarehouse}`);
+			updateCategoryCounts(savedWarehouse);
+		}
+	}, [pageReady, updateCategoryCounts]);
 
 	// Redirecionamento para login se não estiver autenticado
 	useEffect(() => {
