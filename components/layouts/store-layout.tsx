@@ -150,7 +150,6 @@ export default function StoreLayout({
 				{/* Sidebar - apenas se não estiver oculta */}
 				{!hideSidebar && (
 					<>
-						{/* Sidebar temporariamente desabilitado
 						<div
 							className={`
 								lg:w-64 lg:flex-shrink-0 transition-all duration-300
@@ -168,7 +167,6 @@ export default function StoreLayout({
 								onClick={toggleSidebar}
 							></div>
 						)}
-						*/}
 					</>
 				)}
 
