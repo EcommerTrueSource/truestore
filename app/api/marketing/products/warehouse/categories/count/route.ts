@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const baseUrl = TrueCore.getApiUrl();
     
     if (!baseUrl) {
+      console.error('[Route-Categories-Count] URL da API True Core não configurada');
       return Response.json(
         { error: 'URL da API True Core não configurada' },
         { status: 500 }
@@ -25,22 +26,31 @@ export async function GET(request: NextRequest) {
     
     // Obter parâmetros da URL
     const searchParams = new URL(request.url).searchParams;
+    console.log('[Route-Categories-Count] Parâmetros recebidos:', Object.fromEntries(searchParams.entries()));
     
     // Validar parâmetro warehouseName
     let warehouseName = searchParams.get('warehouseName');
     if (!warehouseName || warehouseName.trim() === '') {
       // Definir um valor padrão se não foi fornecido
       warehouseName = 'MKT-Creator';
-      console.log('[TrueCore] warehouseName não fornecido, usando valor padrão:', warehouseName);
+      console.log('[Route-Categories-Count] warehouseName não fornecido, usando valor padrão:', warehouseName);
       
       // Atualizar os parâmetros da URL com o valor padrão
       searchParams.set('warehouseName', warehouseName);
     }
     
+    // Garantir que os parâmetros inStock e active estejam presentes
+    if (!searchParams.has('inStock')) {
+      searchParams.set('inStock', 'true');
+    }
+    if (!searchParams.has('active')) {
+      searchParams.set('active', 'true');
+    }
+    
     // Construir URL para a API do True Core
     const apiUrl = `${baseUrl}/marketing/products/warehouse/categories/count?${searchParams.toString()}`;
     
-    console.log(`[TrueCore] Buscando contagens de categorias do depósito ${warehouseName} em: ${apiUrl}`);
+    console.log(`[Route-Categories-Count] Buscando contagens de categorias do depósito ${warehouseName} em: ${apiUrl}`);
     
     // Obter token de acesso
     const accessToken = TrueCore.extractToken(request);
@@ -51,12 +61,13 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
-      }
+      },
+      cache: 'no-store' // Garantir que não use cache
     });
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[TrueCore] Erro ao buscar contagens de categorias: ${response.status} - ${errorText}`);
+      console.error(`[Route-Categories-Count] Erro ao buscar contagens de categorias: ${response.status} - ${errorText}`);
       
       return Response.json(
         { error: `Erro ao buscar contagens de categorias: ${response.statusText}` },
@@ -67,11 +78,29 @@ export async function GET(request: NextRequest) {
     // Obter dados da resposta
     const data = await response.json();
     
-    console.log(`[TrueCore] Recebidas ${data.categories?.length || 0} categorias com contagens para o depósito ${warehouseName}`);
+    console.log(`[Route-Categories-Count] Recebidas ${data.categories?.length || 0} categorias com contagens para o depósito ${warehouseName}`);
     
-    return Response.json(data);
+    // Log detalhado para depuração
+    if (data.categories?.length > 0) {
+      console.log('[Route-Categories-Count] Resumo das contagens por categoria:');
+      data.categories.forEach((cat: { name: string; itemQuantity: number }) => {
+        console.log(`- ${cat.name}: ${cat.itemQuantity} produtos`);
+      });
+    }
+    
+    // Configurar cabeçalhos para evitar cache em todos os níveis
+    const headers = new Headers({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers
+    });
   } catch (error: unknown) {
-    console.error('[TrueCore] Erro ao processar requisição de contagens de categorias:', error);
+    console.error('[Route-Categories-Count] Erro ao processar requisição de contagens de categorias:', error);
     
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     

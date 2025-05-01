@@ -370,19 +370,41 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 		lastWarehouseRef.current = warehouseName;
 		lastUpdateRef.current = now;
 		isLoadingRef.current = true;
+		warehouseNameRef.current = warehouseName;
 
 		console.log(`[Categories] Atualizando contagens de produtos para depósito: ${warehouseName}`);
 		setIsLoading(true);
 
 		try {
-			// Buscar contagens de categorias usando o novo endpoint
+			// Forçar sempre os parâmetros corretos para garantir consistência
+			console.log('[Categories] Preparando chamada para fetchCategoryCounts com parâmetros inStock=true, active=true');
+			
+			// Buscar contagens de categorias usando o endpoint, sempre com skipCache=true
 			const result = await fetchCategoryCounts(warehouseName, true);
 			
 			if (result && result.categories && Array.isArray(result.categories)) {
 				console.log(`[Categories] Recebidas ${result.categories.length} categorias com contagens para o depósito ${warehouseName}`);
 				
-				// Atualizar o estado com as categorias e suas contagens
-				setCategories(result.categories);
+				// Verificação das categorias recebidas para depuração
+				if (result.categories.length > 0) {
+					const categoryCounts = result.categories.map((cat: { name: string; itemQuantity: number }) => 
+						`${cat.name}: ${cat.itemQuantity}`).join(', ');
+					console.log(`[Categories] Contagens recebidas: ${categoryCounts}`);
+				}
+				
+				// Garantir que as categorias sejam atualizadas no estado do React
+				setCategories([...result.categories]);
+				
+				// Salvar no localStorage para persistência
+				try {
+					localStorage.setItem(CATEGORIES_CACHE_KEY, JSON.stringify({
+						data: result.categories,
+						timestamp: Date.now()
+					}));
+					console.log('[Categories] Cache de categorias atualizado no localStorage');
+				} catch (cacheError) {
+					console.warn('[Categories] Erro ao salvar cache de categorias:', cacheError);
+				}
 			} else {
 				console.warn('[Categories] Resposta inválida ao buscar contagens de categorias:', result);
 			}

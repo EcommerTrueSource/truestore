@@ -528,6 +528,9 @@ export default function StorePage() {
 					);
 				}
 
+				// Atualizar contagens de categorias para o novo warehouse
+				updateCategoryCounts(warehouseName);
+
 				// Recarregar os produtos com o warehouse correto
 				loadProducts(1, false);
 			} else {
@@ -536,6 +539,9 @@ export default function StorePage() {
 				);
 				setWarehouseName('MKT-Creator');
 				localStorage.setItem('warehouse_name', 'MKT-Creator');
+				
+				// Atualizar contagens de categorias para o warehouse padrão
+				updateCategoryCounts('MKT-Creator');
 			}
 		} catch (error) {
 			console.error(
@@ -545,6 +551,9 @@ export default function StorePage() {
 			// Em caso de erro, usar Creator como padrão
 			setWarehouseName('MKT-Creator');
 			localStorage.setItem('warehouse_name', 'MKT-Creator');
+			
+			// Atualizar contagens de categorias mesmo em caso de erro
+			updateCategoryCounts('MKT-Creator');
 		}
 	};
 
@@ -863,23 +872,12 @@ export default function StorePage() {
 
 	// Efeito para atualizar contagens de categorias quando a página está pronta ou o depósito muda
 	useEffect(() => {
-		// Evitar execução se a página não estiver pronta ou não tivermos warehouse
-		if (!pageReady) return;
-		
-		// Usar o warehouseName do estado ou do localStorage
-		const warehouse = warehouseName || localStorage.getItem('warehouse_name');
-		
-		if (warehouse && updateCategoryCounts) {
-			console.log(`[Store] Atualizando contagens de categorias para o depósito: ${warehouse}`);
-			
-			// Usar um setTimeout para evitar múltiplas chamadas em curto espaço de tempo
-			const timer = setTimeout(() => {
-				updateCategoryCounts(warehouse);
-			}, 100);
-			
-			return () => clearTimeout(timer);
+		if (warehouseName && pageReady) {
+			console.log(`[StorePage] Atualizando contagens de categorias para o warehouse: ${warehouseName}`);
+			// Usar o método do contexto para atualizar as contagens com o warehouse atual
+			updateCategoryCounts(warehouseName);
 		}
-	}, [pageReady, warehouseName]);
+	}, [warehouseName, pageReady, updateCategoryCounts]);
 
 	// Redirecionamento para login se não estiver autenticado
 	useEffect(() => {
