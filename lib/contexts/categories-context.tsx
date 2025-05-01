@@ -55,6 +55,13 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 	// Referência para o warehouseName atual
 	const warehouseNameRef = useRef<string>('MKT-Creator');
 
+	// Referência para último warehouse usado nas contagens
+	const lastWarehouseRef = useRef<string>('');
+	// Referência para timestamp da última atualização de contagens
+	const lastUpdateRef = useRef<number>(0);
+	// Tempo mínimo entre atualizações de contagens (em ms)
+	const UPDATE_COOLDOWN = 5000; // 5 segundos
+
 	// Função para carregar categorias que pode ser chamada explicitamente
 	const loadCategories = async (force = false) => {
 		// Verificar se estamos na página de login - não carregar categorias nessa página
@@ -343,6 +350,27 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 			return;
 		}
 
+		// Verificar se já estamos atualizando para evitar chamadas duplicadas
+		if (isLoadingRef.current) {
+			console.log(`[Categories] Já existe uma atualização em andamento para ${warehouseName}, ignorando nova solicitação`);
+			return;
+		}
+
+		// Verificar se é o mesmo warehouse e se já atualizamos recentemente
+		const now = Date.now();
+		const isSameWarehouse = warehouseName === lastWarehouseRef.current;
+		const timeSinceLastUpdate = now - lastUpdateRef.current;
+		
+		if (isSameWarehouse && timeSinceLastUpdate < UPDATE_COOLDOWN) {
+			console.log(`[Categories] Atualização muito recente para ${warehouseName} (${timeSinceLastUpdate}ms), ignorando`);
+			return;
+		}
+
+		// Atualizar referências
+		lastWarehouseRef.current = warehouseName;
+		lastUpdateRef.current = now;
+		isLoadingRef.current = true;
+
 		console.log(`[Categories] Atualizando contagens de produtos para depósito: ${warehouseName}`);
 		setIsLoading(true);
 
@@ -364,6 +392,7 @@ export const CategoriesProvider: React.FC<{ children: ReactNode }> = ({
 			setError(`Erro ao atualizar contagens: ${errorMessage}`);
 		} finally {
 			setIsLoading(false);
+			isLoadingRef.current = false;
 		}
 	};
 	

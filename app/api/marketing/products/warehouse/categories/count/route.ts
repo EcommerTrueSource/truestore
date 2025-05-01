@@ -27,12 +27,14 @@ export async function GET(request: NextRequest) {
     const searchParams = new URL(request.url).searchParams;
     
     // Validar parâmetro warehouseName
-    const warehouseName = searchParams.get('warehouseName');
-    if (!warehouseName) {
-      return Response.json(
-        { error: 'O parâmetro warehouseName é obrigatório' },
-        { status: 400 }
-      );
+    let warehouseName = searchParams.get('warehouseName');
+    if (!warehouseName || warehouseName.trim() === '') {
+      // Definir um valor padrão se não foi fornecido
+      warehouseName = 'MKT-Creator';
+      console.log('[TrueCore] warehouseName não fornecido, usando valor padrão:', warehouseName);
+      
+      // Atualizar os parâmetros da URL com o valor padrão
+      searchParams.set('warehouseName', warehouseName);
     }
     
     // Construir URL para a API do True Core

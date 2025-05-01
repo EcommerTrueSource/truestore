@@ -861,24 +861,25 @@ export default function StorePage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [warehouseName, pageReady]);
 
-	// Efeito para atualizar contagens de categorias quando o depósito muda
+	// Efeito para atualizar contagens de categorias quando a página está pronta ou o depósito muda
 	useEffect(() => {
-		if (warehouseName && updateCategoryCounts) {
-			console.log(`[Store] Atualizando contagens de categorias para o depósito: ${warehouseName}`);
-			updateCategoryCounts(warehouseName);
-		}
-	}, [warehouseName, updateCategoryCounts]);
-	
-	// Efeito para atualizar contagens quando a página é carregada
-	useEffect(() => {
+		// Evitar execução se a página não estiver pronta ou não tivermos warehouse
 		if (!pageReady) return;
 		
-		const savedWarehouse = localStorage.getItem('warehouse_name');
-		if (savedWarehouse) {
-			console.log(`[StorePage] Atualizando contagens de categorias para o depósito ${savedWarehouse}`);
-			updateCategoryCounts(savedWarehouse);
+		// Usar o warehouseName do estado ou do localStorage
+		const warehouse = warehouseName || localStorage.getItem('warehouse_name');
+		
+		if (warehouse && updateCategoryCounts) {
+			console.log(`[Store] Atualizando contagens de categorias para o depósito: ${warehouse}`);
+			
+			// Usar um setTimeout para evitar múltiplas chamadas em curto espaço de tempo
+			const timer = setTimeout(() => {
+				updateCategoryCounts(warehouse);
+			}, 100);
+			
+			return () => clearTimeout(timer);
 		}
-	}, [pageReady, updateCategoryCounts]);
+	}, [pageReady, warehouseName]);
 
 	// Redirecionamento para login se não estiver autenticado
 	useEffect(() => {
