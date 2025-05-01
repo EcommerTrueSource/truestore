@@ -66,10 +66,6 @@ export async function GET(request: NextRequest) {
     // Garantir que o parâmetro 'category' seja mantido se já estiver presente
     if (searchParams.has('category')) {
       console.log(`[TrueCore] Usando categoria com ID: ${searchParams.get('category')}`);
-      
-      // Importante: O painel-true precisa deste parâmetro para usar o fluxo especial de filtragem
-      // que integra dados do PostgreSQL (categorias) com BigQuery (estoque)
-      searchParams.set('usePostgresFirst', 'true');
     }
     
     // Adicionar/garantir filtros padrão se não estiverem presentes
@@ -106,7 +102,6 @@ export async function GET(request: NextRequest) {
             // Adicionar o primeiro ID como categoria principal
             if (!searchParams.has('category')) {
               searchParams.set('category', categoryIds[0]);
-              searchParams.set('usePostgresFirst', 'true');
             }
           }
         }

@@ -1394,8 +1394,7 @@ export async function searchWarehouseProducts({
     // Adicionar o filtro de categoria se fornecido
     if (category && category.trim()) {
       queryParams.append('category', category.trim());
-      queryParams.append('usePostgresFirst', 'true'); // Parâmetro para usar o fluxo otimizado do backend
-      console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName} (usando PostgreSQL primeiro)`);
+      console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName}`);
     }
 
     // Adicionar timestamp apenas se skipCache for true

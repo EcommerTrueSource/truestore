@@ -65,7 +65,7 @@ export function CategorySidebar() {
 				params.set('categoryName', categoryName);
 			}
 			console.log(
-				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId}). Usando endpoint com category=${categoryId}. Este parâmetro será passado para a API.`
+				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId}). Usando endpoint /marketing/products/warehouse/search com category=${categoryId}. Este parâmetro será passado para a API.`
 			);
 		}
 		router.push(`${pathname}?${params.toString()}`);
