@@ -17,6 +17,7 @@ interface GroupedCategory extends Category {
 	isGrouped: boolean;
 	relatedCategories: string[]; // IDs das categorias relacionadas
 	totalItems: number; // Soma de items de todas as categorias do grupo
+	displayName?: string; // Nome para exibição (sem a palavra "unidade")
 }
 
 export function CategorySidebar() {
@@ -28,6 +29,9 @@ export function CategorySidebar() {
 	const initialLoadComplete = useRef(false);
 
 	const currentCategory = searchParams.get('category');
+	
+	// Função auxiliar para verificar se um nome contém a palavra "unidade"
+	const hasUnidadeWord = (name: string) => name.toLowerCase().includes('unidade');
 
 	// Função para agrupar categorias com nomes similares
 	const groupCategories = (originalCategories: Category[]): GroupedCategory[] => {
@@ -49,7 +53,6 @@ export function CategorySidebar() {
 
 		// Primeiro, filtrar as categorias que contêm a palavra "unidade" (em qualquer capitalização)
 		// para que possamos dar prioridade às versões sem "unidade"
-		const hasUnidadeWord = (name: string) => name.toLowerCase().includes('unidade');
 		const categoriesWithoutUnidade = originalCategories.filter(
 			cat => cat.id !== 'all' && !hasUnidadeWord(cat.name)
 		);
@@ -166,8 +169,28 @@ export function CategorySidebar() {
 			}
 		});
 
-		// Não adicionar categorias com "unidade" não agrupadas, elas ficarão invisíveis
-		// Removendo o código que antes processava as categorias com "unidade" restantes
+		// Processar as categorias com "unidade" restantes (que não foram agrupadas)
+		categoriesWithUnidade.forEach(unidadeCat => {
+			// Pular se já foi processada
+			if (processedCategoryIds.has(unidadeCat.id)) {
+				return;
+			}
+
+			// Remover a palavra "unidade" do nome para exibição
+			const nameWithoutUnidade = unidadeCat.name.replace(/\s*[Uu]nidade\s*/g, '').trim();
+			
+			// Adicionar à lista com o nome modificado
+			result.push({
+				...unidadeCat,
+				name: nameWithoutUnidade, // Nome sem a palavra "unidade"
+				isGrouped: false,
+				relatedCategories: [],
+				totalItems: unidadeCat.itemQuantity || 0
+			});
+			
+			processedCategoryIds.add(unidadeCat.id);
+			console.log(`[Sidebar] Categoria com unidade exibida com nome modificado: "${unidadeCat.name}" -> "${nameWithoutUnidade}"`);
+		});
 
 		return result;
 	};
@@ -387,7 +410,9 @@ export function CategorySidebar() {
 												'translate-x-1'
 										)}
 									>
-										{category.name}
+										{hasUnidadeWord(category.name) 
+											? category.name.replace(/\s*[Uu]nidade\s*/g, '').trim()
+											: category.name}
 									</span>
 									{category.id !== 'all' && (
 										<Badge
