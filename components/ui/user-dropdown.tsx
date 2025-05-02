@@ -193,28 +193,22 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 
 	// Função que realiza o redirecionamento final
 	const performLogout = useCallback(() => {
-		// Criar um iframe invisível para carregar a página de logout
-		// Isso garante que a animação continue visível enquanto o navegador processa o logout
-		const iframe = document.createElement('iframe');
-		iframe.style.display = 'none';
-		document.body.appendChild(iframe);
+		try {
+			// Redirecionar imediatamente para a página de login
+			router.push('/login');
 
-		// Configurar um ouvinte para o iframe que garantirá que sejamos redirecionados
-		// mesmo se o iframe falhar
-		const fallbackTimer = setTimeout(() => {
+			// Fallback caso o router falhe
+			setTimeout(() => {
+				if (window.location.pathname !== '/login') {
+					window.location.href = '/login';
+				}
+			}, 500);
+		} catch (error) {
+			console.error('Erro durante redirecionamento de logout:', error);
+			// Fallback direto para o caso de qualquer erro
 			window.location.href = '/login';
-		}, 2000);
-
-		// Quando o iframe terminar de carregar, remova o timer de fallback
-		iframe.onload = () => {
-			clearTimeout(fallbackTimer);
-			// Forçar a navegação para login
-			window.location.href = '/login';
-		};
-
-		// Configurar o iframe para carregar a API de logout
-		iframe.src = '/api/auth/logout';
-	}, []);
+		}
+	}, [router]);
 
 	// Mostrar estado de carregamento até que a autenticação seja verificada
 	if (isLoading) {

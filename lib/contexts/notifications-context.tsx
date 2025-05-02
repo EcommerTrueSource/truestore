@@ -38,6 +38,7 @@ interface NotificationsContextType {
 	markAsRead: (id: string) => void;
 	markAllAsRead: () => void;
 	clearNotifications: () => void;
+	fetchNotifications?: () => Promise<void>; // Função para buscar notificações do endpoint no futuro
 }
 
 const NotificationsContext = createContext<
@@ -49,6 +50,7 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
 	const [notifications, setNotifications] = useState<Notification[]>([]);
 	const [unreadCount, setUnreadCount] = useState<number>(0);
+	const [isLoading, setIsLoading] = useState<boolean>(false);
 
 	// Carregar notificações do localStorage
 	useEffect(() => {
@@ -67,10 +69,12 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({
 				setNotifications(notificationsWithDates);
 			} catch (error) {
 				console.error('Falha ao analisar notificações:', error);
+				// Em caso de erro, inicializa com array vazio
+				setNotifications([]);
 			}
 		} else {
-			// Gerar alguns dados de exemplo se não houver nada no localStorage
-			generateSampleNotifications();
+			// Inicializa com array vazio ao invés de dados mockados
+			setNotifications([]);
 		}
 	}, []);
 
@@ -83,42 +87,26 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({
 		setUnreadCount(unread);
 	}, [notifications]);
 
-	// Gerar algumas notificações de exemplo para demonstração
-	const generateSampleNotifications = () => {
-		const sampleNotifications: Notification[] = [
-			{
-				id: '1',
-				type: NotificationType.STOCK_UPDATE,
-				title: 'Produto de volta ao estoque',
-				message:
-					'O produto que você estava interessado está disponível novamente!',
-				date: new Date(Date.now() - 3600000), // 1 hora atrás
-				read: false,
-				productId: '1',
-				imageUrl: '/logo-true.svg',
-			},
-			{
-				id: '2',
-				type: NotificationType.ORDER_STATUS,
-				title: 'Atualização de pedido',
-				message: 'Seu pedido #12345 foi enviado e chegará em breve.',
-				date: new Date(Date.now() - 86400000), // 1 dia atrás
-				read: false,
-				orderId: '12345',
-			},
-			{
-				id: '3',
-				type: NotificationType.NEW_PRODUCT,
-				title: 'Novo produto disponível',
-				message: 'Confira o novo produto lançado em nossa loja!',
-				date: new Date(Date.now() - 172800000), // 2 dias atrás
-				read: true,
-				productId: '2',
-				imageUrl: '/logo-true.svg',
-			},
-		];
+	// Preparar função para buscar notificações do endpoint
+	// Será implementada quando o endpoint estiver pronto
+	const fetchNotifications = async () => {
+		try {
+			setIsLoading(true);
+			// TODO: Implementar chamada para o endpoint de notificações quando estiver pronto
+			// const response = await fetch('/api/notifications');
+			// const data = await response.json();
+			// setNotifications(data.map((notif: any) => ({
+			//   ...notif,
+			//   date: new Date(notif.date)
+			// })));
 
-		setNotifications(sampleNotifications);
+			// Por enquanto, apenas log
+			console.log('Função preparada para buscar notificações do endpoint');
+		} catch (error) {
+			console.error('Erro ao buscar notificações:', error);
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	// Adicionar uma nova notificação
@@ -166,6 +154,7 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({
 				markAsRead,
 				markAllAsRead,
 				clearNotifications,
+				fetchNotifications,
 			}}
 		>
 			{children}

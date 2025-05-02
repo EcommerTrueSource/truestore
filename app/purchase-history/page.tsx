@@ -13,149 +13,116 @@ import {
 	ChevronRight,
 	AlertCircle,
 	Clock,
+	Loader2,
+	Truck,
+	CheckCircle,
+	XCircle,
+	FileText,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency } from '@/lib/utils';
-
-// Interfaces para tipagem
-interface OrderItem {
-	id: number;
-	name: string;
-	price: number;
-	quantity: number;
-	imageUrl?: string;
-}
-
-interface Order {
-	id: string;
-	date: string;
-	status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'canceled';
-	total: number;
-	items: OrderItem[];
-}
+import {
+	Order,
+	OrderItem,
+	formatOrderDate,
+	formatOrderTime,
+	mapStatusToFrontend,
+	orderStatusConfig,
+} from '@/types/order';
+import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function PurchaseHistoryPage() {
 	const router = useRouter();
 	const [orders, setOrders] = useState<Order[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState('all');
+	const { toast } = useToast();
 
-	// Textos e cores para cada status
-	const statusConfig = {
-		pending: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-800' },
-		processing: {
-			label: 'Em processamento',
-			color: 'bg-blue-100 text-blue-800',
+	const tabConfig = [
+		{
+			id: 'all',
+			label: 'Todos os pedidos',
+			icon: <FileText className="h-4 w-4 mr-1" />,
 		},
-		shipped: { label: 'Enviado', color: 'bg-purple-100 text-purple-800' },
-		delivered: { label: 'Entregue', color: 'bg-green-100 text-green-800' },
-		canceled: { label: 'Cancelado', color: 'bg-red-100 text-red-800' },
-	};
+		{
+			id: 'pending',
+			label: 'Pendentes',
+			icon: <Clock className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'processing',
+			label: 'Em processamento',
+			icon: <Package className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'shipped',
+			label: 'Enviados',
+			icon: <Truck className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'delivered',
+			label: 'Entregues',
+			icon: <CheckCircle className="h-4 w-4 mr-1" />,
+		},
+		{
+			id: 'canceled',
+			label: 'Cancelados',
+			icon: <XCircle className="h-4 w-4 mr-1" />,
+		},
+	];
 
 	useEffect(() => {
-		// Simular carregamento de pedidos
+		// Carregar pedidos do cliente da API
 		const loadOrders = async () => {
 			setIsLoading(true);
+			setError(null);
+
 			try {
-				// Simulação de dados de pedidos
-				await new Promise((resolve) => setTimeout(resolve, 1000));
+				const response = await fetch('/api/orders/history');
 
-				const mockOrders: Order[] = [
-					{
-						id: 'P123456',
-						date: '2023-10-12T14:30:00Z',
-						status: 'delivered',
-						total: 259.7,
-						items: [
-							{
-								id: 1,
-								name: 'Base Líquida Ultra HD',
-								price: 89.9,
-								quantity: 2,
-								imageUrl:
-									'https://images.unsplash.com/photo-1596704017254-9a89b5d155cc?auto=format&fit=crop&w=800&q=80',
-							},
-							{
-								id: 2,
-								name: 'Sérum Facial Vitamina C',
-								price: 79.9,
-								quantity: 1,
-								imageUrl:
-									'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80',
-							},
-						],
-					},
-					{
-						id: 'P789012',
-						date: '2023-11-05T10:15:00Z',
-						status: 'shipped',
-						total: 134.8,
-						items: [
-							{
-								id: 3,
-								name: 'Paleta de Sombras Sunset',
-								price: 79.9,
-								quantity: 1,
-								imageUrl:
-									'https://images.unsplash.com/photo-1596704017390-8a43a4c580e4?auto=format&fit=crop&w=800&q=80',
-							},
-							{
-								id: 4,
-								name: 'Máscara Facial Hidratante',
-								price: 54.9,
-								quantity: 1,
-							},
-						],
-					},
-					{
-						id: 'P345678',
-						date: '2023-12-18T16:45:00Z',
-						status: 'processing',
-						total: 175.6,
-						items: [
-							{
-								id: 5,
-								name: 'Kit Pincéis Profissionais',
-								price: 175.6,
-								quantity: 1,
-							},
-						],
-					},
-				];
+				if (!response.ok) {
+					const errorData = await response.json();
+					throw new Error(
+						errorData.error || `Erro ao carregar pedidos: ${response.status}`
+					);
+				}
 
-				setOrders(mockOrders);
+				const data = await response.json();
+				setOrders(data.orders || []);
+
+				// Log para debug
+				console.log(`Carregados ${data.orders?.length || 0} pedidos`);
 			} catch (error) {
 				console.error('Erro ao carregar histórico de compras:', error);
+				setError(
+					error instanceof Error ? error.message : 'Erro ao carregar pedidos'
+				);
+				toast({
+					variant: 'destructive',
+					title: 'Erro ao carregar histórico',
+					description:
+						error instanceof Error
+							? error.message
+							: 'Ocorreu um erro ao buscar seu histórico de pedidos',
+				});
 			} finally {
 				setIsLoading(false);
 			}
 		};
 
 		loadOrders();
-	}, []);
+	}, [toast]);
 
 	const filteredOrders =
 		activeTab === 'all'
 			? orders
-			: orders.filter((order) => order.status === activeTab);
-
-	const formatDate = (dateString: string) => {
-		const date = new Date(dateString);
-		return new Intl.DateTimeFormat('pt-BR', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-		}).format(date);
-	};
-
-	const formatTime = (dateString: string) => {
-		const date = new Date(dateString);
-		return new Intl.DateTimeFormat('pt-BR', {
-			hour: '2-digit',
-			minute: '2-digit',
-		}).format(date);
-	};
+			: orders.filter((order) => {
+					const mappedStatus = mapStatusToFrontend(order.status);
+					return mappedStatus === activeTab;
+			  });
 
 	return (
 		<StoreLayout>
@@ -167,7 +134,7 @@ export default function PurchaseHistoryPage() {
 						</div>
 						<div>
 							<h1 className="text-2xl font-bold bg-gradient-to-r from-brand-magenta to-brand-orange bg-clip-text text-transparent">
-								Histórico de Compras
+								Histórico de Pedidos
 							</h1>
 							<p className="text-gray-500 text-sm">
 								Acompanhe e gerencie seus pedidos anteriores
@@ -182,37 +149,58 @@ export default function PurchaseHistoryPage() {
 					onValueChange={setActiveTab}
 					className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6"
 				>
-					<TabsList className="grid grid-cols-5 mb-4">
+					{/* Versão mobile: grid de botões */}
+					<div className="md:hidden mb-4">
+						<div className="grid grid-cols-2 gap-2 mb-2">
+							{tabConfig.slice(0, 4).map((tab) => (
+								<Button
+									key={tab.id}
+									variant={activeTab === tab.id ? 'default' : 'outline'}
+									className={cn(
+										'flex items-center justify-center h-10 px-2 text-sm',
+										activeTab === tab.id
+											? 'bg-brand-magenta text-white'
+											: 'bg-white hover:bg-brand-magenta/10 hover:text-brand-magenta hover:border-brand-magenta'
+									)}
+									onClick={() => setActiveTab(tab.id)}
+								>
+									{tab.icon}
+									<span className="truncate">{tab.label}</span>
+								</Button>
+							))}
+						</div>
+						<div className="grid grid-cols-2 gap-2">
+							{tabConfig.slice(4).map((tab) => (
+								<Button
+									key={tab.id}
+									variant={activeTab === tab.id ? 'default' : 'outline'}
+									className={cn(
+										'flex items-center justify-center h-10 px-2 text-sm',
+										activeTab === tab.id
+											? 'bg-brand-magenta text-white'
+											: 'bg-white hover:bg-brand-magenta/10 hover:text-brand-magenta hover:border-brand-magenta'
+									)}
+									onClick={() => setActiveTab(tab.id)}
+								>
+									{tab.icon}
+									<span className="truncate">{tab.label}</span>
+								</Button>
+							))}
+						</div>
+					</div>
+
+					{/* Versão desktop: tabs horizontais */}
+					<TabsList className="hidden md:flex w-full mb-4 overflow-x-auto">
+						{tabConfig.map((tab) => (
 						<TabsTrigger
-							value="all"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
+								key={tab.id}
+								value={tab.id}
+								className="flex items-center whitespace-nowrap data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
 						>
-							Todos
+								{tab.icon}
+								{tab.label}
 						</TabsTrigger>
-						<TabsTrigger
-							value="processing"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
-						>
-							Em Processamento
-						</TabsTrigger>
-						<TabsTrigger
-							value="shipped"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
-						>
-							Enviados
-						</TabsTrigger>
-						<TabsTrigger
-							value="delivered"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
-						>
-							Entregues
-						</TabsTrigger>
-						<TabsTrigger
-							value="canceled"
-							className="data-[state=active]:bg-brand-magenta data-[state=active]:text-white"
-						>
-							Cancelados
-						</TabsTrigger>
+						))}
 					</TabsList>
 
 					<TabsContent value={activeTab} className="mt-2">
@@ -231,10 +219,32 @@ export default function PurchaseHistoryPage() {
 									</Card>
 								))}
 							</div>
+						) : error ? (
+							// Estado de erro
+							<div className="text-center py-16">
+								<div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-red-100 mb-6">
+									<AlertCircle className="h-10 w-10 text-red-500" />
+								</div>
+								<h2 className="mt-4 text-xl font-medium text-gray-900">
+									Erro ao carregar histórico
+								</h2>
+								<p className="mt-2 text-gray-500 max-w-md mx-auto">{error}</p>
+								<Button
+									onClick={() => router.push('/store')}
+									className="mt-6 bg-brand-magenta hover:bg-brand-magenta/90"
+								>
+									<ShoppingBag className="mr-2 h-4 w-4" />
+									Voltar para a loja
+								</Button>
+							</div>
 						) : filteredOrders.length > 0 ? (
 							// Lista de pedidos
 							<div className="space-y-4">
-								{filteredOrders.map((order) => (
+								{filteredOrders.map((order) => {
+									const statusKey = mapStatusToFrontend(order.status);
+									const statusConfig = orderStatusConfig[statusKey];
+
+									return (
 									<Card
 										key={order.id}
 										className="overflow-hidden border-gray-200 hover:border-brand-magenta transition-colors"
@@ -245,35 +255,36 @@ export default function PurchaseHistoryPage() {
 													<div className="flex items-center gap-3 mb-2">
 														<Package className="h-5 w-5 text-brand-magenta" />
 														<div className="font-medium">
-															Pedido #{order.id}
+																Pedido #{order.id.substring(0, 8)}
 														</div>
-														<Badge className={statusConfig[order.status].color}>
-															{statusConfig[order.status].label}
+															<Badge className={statusConfig.color}>
+																{statusConfig.label}
 														</Badge>
 													</div>
 
 													<div className="mt-2 grid grid-cols-2 gap-2 text-sm">
 														<div className="flex items-center gap-1 text-gray-500">
 															<CalendarDays className="h-4 w-4" />
-															<span>{formatDate(order.date)}</span>
+																<span>{formatOrderDate(order.createdAt)}</span>
 														</div>
 														<div className="flex items-center gap-1 text-gray-500">
 															<Clock className="h-4 w-4" />
-															<span>{formatTime(order.date)}</span>
+																<span>{formatOrderTime(order.createdAt)}</span>
 														</div>
 													</div>
 
 													<div className="mt-4 space-y-2">
-														{order.items.map((item, idx) => (
+															{order.__items__.map((item) => (
 															<div
-																key={idx}
+																	key={item.id}
 																className="flex items-center gap-3"
 															>
 																<div className="w-10 h-10 bg-gray-100 rounded overflow-hidden shrink-0">
-																	{item.imageUrl ? (
+																		{item.__product__.images &&
+																		item.__product__.images.length > 0 ? (
 																		<img
-																			src={item.imageUrl}
-																			alt={item.name}
+																				src={item.__product__.images[0]}
+																				alt={item.__product__.name}
 																			className="w-full h-full object-cover"
 																		/>
 																	) : (
@@ -284,11 +295,11 @@ export default function PurchaseHistoryPage() {
 																</div>
 																<div className="flex-grow min-w-0">
 																	<p className="text-sm font-medium text-gray-900 truncate">
-																		{item.name}
+																			{item.__product__.name}
 																	</p>
 																	<p className="text-xs text-gray-500">
 																		{item.quantity} x{' '}
-																		{formatCurrency(item.price)}
+																			{formatCurrency(parseFloat(item.price))}
 																	</p>
 																</div>
 															</div>
@@ -302,12 +313,12 @@ export default function PurchaseHistoryPage() {
 															Valor total
 														</p>
 														<p className="text-lg font-bold text-brand-magenta mb-4">
-															{formatCurrency(order.total)}
+																{formatCurrency(parseFloat(order.total))}
 														</p>
 
 														<div className="text-sm text-gray-500">
 															Total de itens:{' '}
-															{order.items.reduce(
+																{order.__items__.reduce(
 																(acc, item) => acc + item.quantity,
 																0
 															)}
@@ -326,7 +337,8 @@ export default function PurchaseHistoryPage() {
 											</div>
 										</CardContent>
 									</Card>
-								))}
+									);
+								})}
 							</div>
 						) : (
 							// Estado vazio
@@ -337,8 +349,8 @@ export default function PurchaseHistoryPage() {
 								<h2 className="mt-4 text-xl font-medium text-gray-900">
 									{activeTab === 'all'
 										? 'Você ainda não fez nenhum pedido'
-										: `Você não tem pedidos ${statusConfig[
-												activeTab as keyof typeof statusConfig
+										: `Você não tem pedidos ${orderStatusConfig[
+												activeTab as keyof typeof orderStatusConfig
 										  ].label.toLowerCase()}`}
 								</h2>
 								<p className="mt-2 text-gray-500 max-w-md mx-auto">

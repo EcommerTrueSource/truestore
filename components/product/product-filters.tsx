@@ -28,7 +28,7 @@ export function ProductFilters() {
 		setSearchQuery(currentSearchQuery);
 	}, [searchParams]);
 
-	const currentSort = searchParams.get('sort') || 'name-asc';
+	const currentSort = searchParams.get('sort') || 'featured';
 	const currentCategoryId = searchParams.get('category');
 
 	// Encontrar o nome da categoria atual a partir do ID
@@ -77,7 +77,7 @@ export function ProductFilters() {
 
 	const hasActiveFilters =
 		searchParams.has('search') ||
-		currentSort !== 'name-asc' ||
+		currentSort !== 'featured' ||
 		currentCategoryId;
 
 	return (
@@ -106,16 +106,16 @@ export function ProductFilters() {
 					</form>
 				</div>
 
-				<div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-hide">
+				<div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:overflow-x-auto sm:pb-1.5 sm:scrollbar-hide">
 					<Button
 						variant={currentSort === 'featured' ? 'default' : 'outline'}
 						size="sm"
 						onClick={() => handleSortChange('featured')}
-						className={
+						className={`flex-shrink-0 ${
 							currentSort === 'featured'
 								? 'bg-brand hover:opacity-90'
 								: 'border-gray-200 hover:border-brand-solid hover:text-brand-solid'
-						}
+						}`}
 					>
 						<ArrowUpDown size={14} className="mr-1" /> Destaque
 					</Button>
@@ -123,11 +123,11 @@ export function ProductFilters() {
 						variant={currentSort === 'price-asc' ? 'default' : 'outline'}
 						size="sm"
 						onClick={() => handleSortChange('price-asc')}
-						className={
+						className={`flex-shrink-0 ${
 							currentSort === 'price-asc'
 								? 'bg-brand hover:opacity-90'
 								: 'border-gray-200 hover:border-brand-solid hover:text-brand-solid'
-						}
+						}`}
 					>
 						<ArrowUpDown size={14} className="mr-1" /> Menor Preço
 					</Button>
@@ -135,11 +135,11 @@ export function ProductFilters() {
 						variant={currentSort === 'price-desc' ? 'default' : 'outline'}
 						size="sm"
 						onClick={() => handleSortChange('price-desc')}
-						className={
+						className={`flex-shrink-0 ${
 							currentSort === 'price-desc'
 								? 'bg-brand hover:opacity-90'
 								: 'border-gray-200 hover:border-brand-solid hover:text-brand-solid'
-						}
+						}`}
 					>
 						<ArrowUpDown size={14} className="mr-1" /> Maior Preço
 					</Button>
@@ -147,11 +147,11 @@ export function ProductFilters() {
 						variant={currentSort === 'name-asc' ? 'default' : 'outline'}
 						size="sm"
 						onClick={() => handleSortChange('name-asc')}
-						className={
+						className={`flex-shrink-0 ${
 							currentSort === 'name-asc'
 								? 'bg-brand hover:opacity-90'
 								: 'border-gray-200 hover:border-brand-solid hover:text-brand-solid'
-						}
+						}`}
 					>
 						<ArrowDownAZ size={14} className="mr-1" /> A-Z
 					</Button>
@@ -161,7 +161,7 @@ export function ProductFilters() {
 							variant="ghost"
 							size="sm"
 							onClick={clearFilters}
-							className="text-gray-500 hover:text-brand-magenta"
+							className="text-gray-500 hover:text-brand-magenta col-span-2"
 						>
 							<X size={16} className="mr-1" />
 							Limpar filtros

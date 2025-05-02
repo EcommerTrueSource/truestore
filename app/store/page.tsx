@@ -389,52 +389,19 @@ export default function StorePage() {
 
 	// Detectar a categoria do cliente a partir dos logs ou localStorage
 	useEffect(() => {
-		// Verificar se já temos um warehouse definido
+		// Verificar se já temos um warehouse definido no localStorage
 		const savedWarehouse = localStorage.getItem('warehouse_name');
-		if (savedWarehouse) {
+		if (savedWarehouse && savedWarehouse.trim()) {
 			setWarehouseName(savedWarehouse);
-			console.log(`[StorePage] Usando warehouse salvo: ${savedWarehouse}`);
+			console.log(
+				`[StorePage] Usando warehouse do localStorage: ${savedWarehouse}`
+			);
 		} else {
-			// Tenta detectar a categoria do usuário a partir do registro de logs
-			const categoryExtract = localStorage.getItem('category_extract');
-			if (categoryExtract) {
-				// Identificar explicitamente cada tipo de categoria
-				if (
-					categoryExtract.includes('Top Master') ||
-					categoryExtract.includes('Clinica Top Master')
-				) {
-					// Cliente é Top Master
-					setWarehouseName('MKT-Top Master');
-					localStorage.setItem('warehouse_name', 'MKT-Top Master');
-					console.log(
-						'[StorePage] Cliente identificado como Top Master, usando warehouse MKT-Top Master'
-					);
-				} else if (
-					categoryExtract.includes('Creator') ||
-					categoryExtract.includes('Médico') ||
-					categoryExtract.includes('Nutricionista') ||
-					categoryExtract.includes('Influenciador') ||
-					categoryExtract.includes('Atleta')
-				) {
-					// Cliente é Creator
-					setWarehouseName('MKT-Creator');
-					localStorage.setItem('warehouse_name', 'MKT-Creator');
-					console.log(
-						'[StorePage] Cliente identificado como Creator, usando warehouse MKT-Creator'
-					);
-				} else {
-					// Categoria não identificada, usar Creator como padrão
-					setWarehouseName('MKT-Creator');
-					localStorage.setItem('warehouse_name', 'MKT-Creator');
-					console.log(
-						'[StorePage] Categoria não identificada, usando warehouse padrão MKT-Creator'
-					);
-				}
-			} else {
-				// Se não temos informação de categoria, verificar se temos informações do cliente
-				// e fazer uma chamada para obter as informações
-				checkCustomerCategory();
-			}
+			// Se não temos warehouse, verificar se há dados do cliente para obter o warehouse
+			console.log(
+				'[StorePage] Warehouse não encontrado no localStorage, buscando informações do cliente'
+			);
+			checkCustomerCategory();
 		}
 	}, []);
 
@@ -486,8 +453,46 @@ export default function StorePage() {
 
 			const customerData = await response.json();
 
-			// Verificar se temos informação de categoria
-			if (customerData && customerData.__category__) {
+			// Determinar o warehouse correto com base nos dados do cliente
+			let warehouseToUse = 'MKT-Creator'; // Valor padrão (fallback)
+
+			// Verificar se existe o campo __warehouse__ diretamente no cliente
+			if (
+				customerData.__warehouse__ &&
+				typeof customerData.__warehouse__ === 'string' &&
+				customerData.__warehouse__.trim()
+			) {
+				warehouseToUse = customerData.__warehouse__;
+				console.log(
+					`[StorePage] Usando warehouse do campo __warehouse__: ${warehouseToUse}`
+				);
+			}
+			// Caso contrário, verificar se existe na categoria
+			else if (
+				customerData.__category__ &&
+				customerData.__category__.depositoNome &&
+				typeof customerData.__category__.depositoNome === 'string' &&
+				customerData.__category__.depositoNome.trim()
+			) {
+				warehouseToUse = customerData.__category__.depositoNome;
+				console.log(
+					`[StorePage] Usando warehouse do campo __category__.depositoNome: ${warehouseToUse}`
+				);
+			}
+			// Caso contrário, verificar depositoId
+			else if (
+				customerData.__category__ &&
+				customerData.__category__.depositoId &&
+				typeof customerData.__category__.depositoId === 'string' &&
+				customerData.__category__.depositoId.trim()
+			) {
+				warehouseToUse = customerData.__category__.depositoId;
+				console.log(
+					`[StorePage] Usando warehouse do campo __category__.depositoId: ${warehouseToUse}`
+				);
+			}
+			// Se não encontrou em nenhum campo específico, usar a lógica original com base no nome da categoria
+			else if (customerData && customerData.__category__) {
 				const categoryName = customerData.__category__.name;
 				console.log(`[StorePage] Categoria do cliente obtida: ${categoryName}`);
 
@@ -502,8 +507,7 @@ export default function StorePage() {
 					categoryName.includes('Top Master') ||
 					categoryName === 'Clinica Top Master'
 				) {
-					setWarehouseName('MKT-Top Master');
-					localStorage.setItem('warehouse_name', 'MKT-Top Master');
+					warehouseToUse = 'MKT-Top Master';
 					console.log(
 						'[StorePage] Cliente é Top Master, definindo warehouse para MKT-Top Master'
 					);
@@ -514,15 +518,11 @@ export default function StorePage() {
 					categoryName.includes('Influenciador') ||
 					categoryName.includes('Atleta')
 				) {
-					setWarehouseName('MKT-Creator');
-					localStorage.setItem('warehouse_name', 'MKT-Creator');
+					warehouseToUse = 'MKT-Creator';
 					console.log(
 						'[StorePage] Cliente é Creator, definindo warehouse para MKT-Creator'
 					);
 				} else {
-					// Categoria não identificada, usar Creator como padrão
-					setWarehouseName('MKT-Creator');
-					localStorage.setItem('warehouse_name', 'MKT-Creator');
 					console.log(
 						'[StorePage] Categoria não identificada, usando warehouse padrão MKT-Creator'
 					);
@@ -535,7 +535,7 @@ export default function StorePage() {
 				loadProducts(1, false);
 			} else {
 				console.log(
-					'[StorePage] Cliente sem categoria definida, usando warehouse padrão'
+					'[StorePage] Cliente sem categoria definida, usando warehouse padrão MKT-Creator'
 				);
 				setWarehouseName('MKT-Creator');
 				localStorage.setItem('warehouse_name', 'MKT-Creator');
@@ -543,6 +543,16 @@ export default function StorePage() {
 				// Atualizar contagens de categorias para o warehouse padrão
 				updateCategoryCounts('MKT-Creator');
 			}
+
+			// Salvar o warehouse obtido para uso futuro
+			setWarehouseName(warehouseToUse);
+			localStorage.setItem('warehouse_name', warehouseToUse);
+			console.log(
+				`[StorePage] Warehouse definido como ${warehouseToUse} e salvo no localStorage`
+			);
+
+			// Recarregar os produtos com o warehouse correto
+			loadProducts(1, false);
 		} catch (error) {
 			console.error(
 				'[StorePage] Erro ao verificar categoria do cliente:',
@@ -581,9 +591,10 @@ export default function StorePage() {
 			// Obter parâmetros de pesquisa e filtros
 			const search = searchQuery || '';
 			const category = categoryId || '';
+			const sort = sortOrder || 'featured';
 
 			console.log(
-				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}, busca: "${search}"${
+				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}, busca: "${search}", ordenação: "${sort}"${
 					append ? ' (anexando resultados)' : ''
 				}`
 			);
@@ -682,6 +693,26 @@ export default function StorePage() {
 				console.log(`[Store] Produtos com estoque disponível: ${withStock} de ${productsData.length} (${withStock > 0 ? Math.round(withStock/productsData.length*100) : 0}%)`);
 			}
 
+			// Ordenar os produtos no lado do cliente, já que a API não suporta ordenação
+			if (sort && sort !== 'featured') {
+				console.log(`[Store] Ordenando produtos por: ${sort}`);
+				filteredProducts = [...filteredProducts].sort((a, b) => {
+					switch (sort) {
+						case 'price-asc':
+							return a.price - b.price;
+						case 'price-desc':
+							return b.price - a.price;
+						case 'name-asc':
+							return a.name.localeCompare(b.name);
+						case 'name-desc':
+							return b.name.localeCompare(a.name);
+						default:
+							return 0;
+					}
+				});
+				console.log(`[Store] Produtos ordenados com sucesso`);
+			}
+
 			// Se estamos anexando a uma lista existente, mesclar resultados
 			// Caso contrário, substituir a lista atual
 			setProducts((prev) => {
@@ -703,7 +734,30 @@ export default function StorePage() {
 					console.log(
 						`[Store] Adicionando ${newProducts.length} novos produtos aos ${prev.length} existentes`
 					);
-					return [...prev, ...newProducts];
+
+					// Combinar produtos existentes com novos produtos
+					const combinedProducts = [...prev, ...newProducts];
+
+					// Se temos uma ordenação ativa, aplicar novamente em toda a lista
+					if (sort && sort !== 'featured') {
+						console.log(`[Store] Reordenando lista combinada por: ${sort}`);
+						return combinedProducts.sort((a, b) => {
+							switch (sort) {
+								case 'price-asc':
+									return a.price - b.price;
+								case 'price-desc':
+									return b.price - a.price;
+								case 'name-asc':
+									return a.name.localeCompare(b.name);
+								case 'name-desc':
+									return b.name.localeCompare(a.name);
+								default:
+									return 0;
+							}
+						});
+					}
+
+					return combinedProducts;
 				} else {
 					console.log(
 						`[Store] Substituindo produtos existentes por ${filteredProducts.length} novos produtos`
@@ -772,7 +826,7 @@ export default function StorePage() {
 				loadProducts(nextPage, true, { _t: Date.now() });
 			}, 500);
 		}
-	}, [isLoadingMore, hasMore, page, loadProducts]);
+	}, [isLoadingMore, hasMore, page, loadProducts, sortOrder]);
 
 	// Configurar o observador de interseção para o carregamento infinito
 	useEffect(() => {
