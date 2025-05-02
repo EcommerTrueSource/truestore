@@ -18,6 +18,7 @@ import { TrueCore } from '@/lib/true-core-proxy';
  * - limit: number - Limite de resultados por página (default: 12)
  * - term: string - Termo para busca de produtos (opcional)
  * - category: string - ID da categoria para filtrar produtos (opcional)
+ * - categoryIds: string[] - Array JSON de IDs de categorias para agrupar (opcional)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -63,6 +64,29 @@ export async function GET(request: NextRequest) {
       searchParams.delete('categoryId'); // Remover o original
     }
     
+    // Tratar parâmetro especial categoryIds (array de IDs de categoria)
+    let categoryIds: string[] = [];
+    if (searchParams.has('categoryIds')) {
+      try {
+        // Obter e parsear o array JSON
+        const categoryIdsStr = searchParams.get('categoryIds');
+        if (categoryIdsStr) {
+          const parsedIds = JSON.parse(categoryIdsStr);
+          
+          // Se for um array válido, processar IDs de categorias
+          if (Array.isArray(parsedIds) && parsedIds.length > 0) {
+            categoryIds = parsedIds;
+            console.log(`[TrueCore] Usando múltiplos IDs de categoria: ${categoryIds.join(', ')}`);
+          }
+        }
+      } catch (e) {
+        console.error('[TrueCore] Erro ao processar categoryIds:', e);
+      }
+      
+      // Remover o parâmetro do URL para não confundir o backend
+      searchParams.delete('categoryIds');
+    }
+    
     // Garantir que o parâmetro 'category' seja mantido se já estiver presente
     if (searchParams.has('category')) {
       console.log(`[TrueCore] Usando categoria com ID: ${searchParams.get('category')}`);
@@ -83,32 +107,6 @@ export async function GET(request: NextRequest) {
     
     // Verificar se devemos ignorar cache com base em parâmetros _t ou _nocache
     const skipCache = searchParams.has('_t') || searchParams.has('_nocache');
-    
-    // Tratar parâmetro especial categoryIds (array de IDs de categoria)
-    if (searchParams.has('categoryIds')) {
-      try {
-        // Obter e parsear o array JSON
-        const categoryIdsStr = searchParams.get('categoryIds');
-        if (categoryIdsStr) {
-          const categoryIds = JSON.parse(categoryIdsStr);
-          
-          // Se for um array válido, adicionar como filtro específico para a API
-          if (Array.isArray(categoryIds) && categoryIds.length > 0) {
-            console.log(`[TrueCore] Usando múltiplos IDs de categoria: ${categoryIds.join(', ')}`);
-            
-            // Remover o parâmetro original para evitar confusão
-            searchParams.delete('categoryIds');
-            
-            // Adicionar o primeiro ID como categoria principal
-            if (!searchParams.has('category')) {
-              searchParams.set('category', categoryIds[0]);
-            }
-          }
-        }
-      } catch (e) {
-        console.error('[TrueCore] Erro ao processar categoryIds:', e);
-      }
-    }
     
     // Construir a URL completa para a API True Core
     const endpoint = '/marketing/products/warehouse/search';
@@ -145,6 +143,90 @@ export async function GET(request: NextRequest) {
 
     // Tentar obter a resposta como JSON
     const data = await TrueCore.tryParseAsJson(response);
+    
+    // Se temos IDs de categorias adicionais para agrupar, precisamos fazer requisições adicionais
+    if (categoryIds.length > 1) {
+      console.log(`[TrueCore] Buscando produtos de ${categoryIds.length - 1} categorias adicionais para agrupamento`);
+      
+      const mainCategoryId = categoryIds[0]; // Já foi usado na requisição principal
+      const additionalIds = categoryIds.slice(1); // Categorias adicionais para buscar
+      const warehouseName = searchParams.get('warehouseName') || 'MKT-Creator';
+      
+      // Array para armazenar todas as requisições adicionais
+      const additionalRequests = additionalIds.map(catId => {
+        // Criar novos parâmetros para cada categoria relacionada
+        const catParams = new URLSearchParams();
+        catParams.set('category', catId);
+        catParams.set('warehouseName', warehouseName);
+        catParams.set('inStock', 'true');
+        catParams.set('active', 'true');
+        catParams.set('page', '0');
+        catParams.set('limit', '100'); // Limite maior para pegar mais produtos
+        
+        const catUrl = `${baseUrl}${endpoint}?${catParams.toString()}`;
+        console.log(`[TrueCore] Buscando produtos da categoria relacionada (${catId}): ${catUrl}`);
+        
+        // Retornar promessa da requisição
+        return fetch(catUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        }).then(resp => {
+          if (!resp.ok) {
+            console.error(`[TrueCore] Erro ao buscar produtos da categoria ${catId}: ${resp.status}`);
+            return { data: [] }; // Retornar array vazio em caso de erro
+          }
+          return TrueCore.tryParseAsJson(resp);
+        }).catch(err => {
+          console.error(`[TrueCore] Falha na requisição para categoria ${catId}:`, err);
+          return { data: [] }; // Retornar array vazio em caso de erro
+        });
+      });
+      
+      // Executar todas as requisições adicionais
+      const additionalResults = await Promise.all(additionalRequests);
+      
+      // Mapa para rastrear produtos já incluídos (por SKU ou ID) para evitar duplicatas
+      const includedProducts = new Set();
+      
+      // Adicionar produtos da categoria principal ao set
+      if (data.data && Array.isArray(data.data)) {
+        data.data.forEach((product: any) => {
+          const productId = product.sku || product.id;
+          includedProducts.add(productId);
+        });
+      }
+      
+      // Adicionar produtos das categorias relacionadas
+      let addedProductsCount = 0;
+      
+      additionalResults.forEach((result, index) => {
+        if (result.data && Array.isArray(result.data)) {
+          // Filtrar produtos para evitar duplicatas
+          const newProducts = result.data.filter((product: any) => {
+            const productId = product.sku || product.id;
+            if (!includedProducts.has(productId)) {
+              includedProducts.add(productId);
+              return true;
+            }
+            return false;
+          });
+          
+          // Adicionar produtos não duplicados ao resultado principal
+          if (data.data && Array.isArray(data.data)) {
+            data.data.push(...newProducts);
+            addedProductsCount += newProducts.length;
+          }
+          
+          console.log(`[TrueCore] Adicionados ${newProducts.length} produtos da categoria ${additionalIds[index]}`);
+        }
+      });
+      
+      console.log(`[TrueCore] Total de produtos agrupados: ${data.data?.length || 0} (${addedProductsCount} adicionados de categorias relacionadas)`);
+    }
     
     // Log de informações sobre os produtos obtidos
     if (data && data.data && Array.isArray(data.data)) {

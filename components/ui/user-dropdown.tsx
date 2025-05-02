@@ -287,19 +287,19 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
 						<DropdownMenuItem asChild>
-							<Link href="/minha-conta" className="cursor-pointer">
+							<Link href="/perfil" className="cursor-pointer">
 								<User className="mr-2 h-4 w-4" />
 								Minha Conta
 							</Link>
 						</DropdownMenuItem>
 						<DropdownMenuItem asChild>
-							<Link href="/meus-pedidos" className="cursor-pointer">
+							<Link href="/purchase-history" className="cursor-pointer">
 								<History className="mr-2 h-4 w-4" />
 								Meus Pedidos
 							</Link>
 						</DropdownMenuItem>
 						<DropdownMenuItem asChild>
-							<Link href="/favoritos" className="cursor-pointer">
+							<Link href="/favorites" className="cursor-pointer">
 								<Heart className="mr-2 h-4 w-4" />
 								Favoritos
 							</Link>
@@ -308,17 +308,17 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
 						<DropdownMenuItem asChild>
-							<Link href="/configuracoes" className="cursor-pointer">
+							<Link href="/settings" className="cursor-pointer">
 								<Settings className="mr-2 h-4 w-4" />
 								Configurações
 							</Link>
 						</DropdownMenuItem>
-						<DropdownMenuItem asChild>
+						{/* <DropdownMenuItem asChild>
 							<Link href="/ajuda" className="cursor-pointer">
 								<HelpCircle className="mr-2 h-4 w-4" />
 								Ajuda e Suporte
 							</Link>
-						</DropdownMenuItem>
+						</DropdownMenuItem> */}
 					</DropdownMenuGroup>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem

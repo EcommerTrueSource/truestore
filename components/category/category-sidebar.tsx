@@ -8,19 +8,115 @@ import { cn } from '@/lib/utils';
 import { useCategories } from '@/lib/contexts/categories-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Category } from '@/types/category';
+
+// Interface para representar uma categoria agrupada
+interface GroupedCategory extends Category {
+	isGrouped: boolean;
+	relatedCategories: string[]; // IDs das categorias relacionadas
+	totalItems: number; // Soma de items de todas as categorias do grupo
+}
 
 export function CategorySidebar() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const { categories, isLoading, error, reload } = useCategories();
-	const [displayedCategories, setDisplayedCategories] = useState<Category[]>([]);
+	const [displayedCategories, setDisplayedCategories] = useState<GroupedCategory[]>([]);
 	const initialLoadComplete = useRef(false);
 
 	const currentCategory = searchParams.get('category');
+
+	// Função para agrupar categorias com nomes similares
+	const groupCategories = (originalCategories: Category[]): GroupedCategory[] => {
+		// Mapa para rastrear categorias já processadas
+		const processedCategoryIds = new Set<string>();
+		const result: GroupedCategory[] = [];
+
+		// Sempre adicionar "Todos os produtos" como primeira categoria, se existir
+		const allCategory = originalCategories.find(cat => cat.id === 'all');
+		if (allCategory) {
+			processedCategoryIds.add(allCategory.id);
+			result.push({
+				...allCategory,
+				isGrouped: false,
+				relatedCategories: [],
+				totalItems: allCategory.itemQuantity || 0
+			});
+		}
+
+		// Processar o restante das categorias
+		originalCategories.forEach(category => {
+			// Pular se já foi processada ou é "Todos os produtos"
+			if (processedCategoryIds.has(category.id) || category.id === 'all') {
+				return;
+			}
+
+			const baseName = category.name.trim();
+			const relatedCategories: Category[] = [];
+
+			// Encontrar categorias relacionadas (com nome similar)
+			originalCategories.forEach(otherCat => {
+				if (
+					otherCat.id !== category.id && 
+					!processedCategoryIds.has(otherCat.id) &&
+					otherCat.id !== 'all' &&
+					otherCat.name.startsWith(baseName) &&
+					otherCat.name !== baseName &&
+					// Verificar se o nome da categoria realmente tem um complemento para o nome base
+					// Por exemplo: "Barrinhas" e "Barrinhas Unidade" - o segundo tem um complemento após o nome base
+					// Mas "Barrinhas" e "Barras" não devem agrupar, pois são categorias distintas
+					(
+						// Verificar se tem um espaço após o nome base
+						otherCat.name.substring(baseName.length, baseName.length + 1) === ' ' ||
+						// Ou se tem um caractere especial como hífen, underline, etc.
+						otherCat.name.substring(baseName.length, baseName.length + 1) === '-' ||
+						otherCat.name.substring(baseName.length, baseName.length + 1) === '_'
+					)
+				) {
+					relatedCategories.push(otherCat);
+					processedCategoryIds.add(otherCat.id);
+				}
+			});
+
+			// Marcar esta categoria como processada
+			processedCategoryIds.add(category.id);
+
+			// Se encontrou categorias relacionadas, criar um grupo
+			if (relatedCategories.length > 0) {
+				// Calcular o total de itens
+				const totalItems = (category.itemQuantity || 0) + 
+					relatedCategories.reduce((sum, cat) => sum + (cat.itemQuantity || 0), 0);
+
+				// Adicionar a categoria principal como um grupo
+				result.push({
+					...category,
+					isGrouped: true,
+					relatedCategories: relatedCategories.map(cat => cat.id),
+					totalItems
+				});
+				
+				console.log(`[Sidebar] Categoria agrupada: "${category.name}" com ${relatedCategories.length} relacionadas: ${relatedCategories.map(cat => `"${cat.name}"`).join(', ')}`);
+			} else {
+				// Adicionar como categoria individual
+				result.push({
+					...category,
+					isGrouped: false,
+					relatedCategories: [],
+					totalItems: category.itemQuantity || 0
+				});
+			}
+		});
+
+		return result;
+	};
+
+	// Usar useMemo para calcular categorias agrupadas apenas quando as categorias mudarem
+	const groupedCategories = useMemo(() => {
+		return groupCategories(categories);
+	}, [categories]);
 
 	// Atualizar categorias exibidas apenas quando houver mudanças significativas
 	useEffect(() => {
@@ -31,10 +127,10 @@ export function CategorySidebar() {
 
 		// Se recebemos novas categorias e não há erro
 		if (categories.length > 0 && !error) {
-			setDisplayedCategories(categories);
+			setDisplayedCategories(groupedCategories);
 			initialLoadComplete.current = true;
 		}
-	}, [categories, isLoading, error]);
+	}, [categories, isLoading, error, groupedCategories]);
 
 	// Log para debug e carregar categorias se necessário - com verificação para evitar loops
 	useEffect(() => {
@@ -53,21 +149,40 @@ export function CategorySidebar() {
 		}
 	}, [pathname, categories.length, isLoading, error, reload]);
 
-	const handleCategoryClick = (categoryId: string, categoryName?: string) => {
+	const handleCategoryClick = (category: GroupedCategory) => {
 		const params = new URLSearchParams(searchParams);
-		if (categoryId === 'all') {
+		
+		if (category.id === 'all') {
 			params.delete('category');
 			params.delete('categoryName');
+			params.delete('categoryIds');
 			console.log('[Sidebar] Selecionada categoria: Todos os produtos');
 		} else {
-			params.set('category', categoryId);
-			if (categoryName) {
-				params.set('categoryName', categoryName);
+			// Se é uma categoria agrupada, passar os IDs de todas as categorias relacionadas
+			if (category.isGrouped && category.relatedCategories.length > 0) {
+				// Incluir o ID da categoria principal e das relacionadas
+				const allCategoryIds = [category.id, ...category.relatedCategories];
+				
+				// Definir o ID principal como o parâmetro 'category'
+				params.set('category', category.id);
+				
+				// Adicionar o array completo de IDs como parâmetro separado
+				params.set('categoryIds', JSON.stringify(allCategoryIds));
+				
+				console.log(
+					`[Sidebar] Selecionada categoria agrupada: ${category.name} com ${category.relatedCategories.length + 1} categorias relacionadas`
+				);
+			} else {
+				// Categoria normal, sem agrupamento
+				params.set('category', category.id);
+				params.delete('categoryIds');
 			}
-			console.log(
-				`[Sidebar] Selecionada categoria: ${categoryName} (ID: ${categoryId}). Usando endpoint /marketing/products/warehouse/search com category=${categoryId}. Este parâmetro será passado para a API.`
-			);
+			
+			if (category.name) {
+				params.set('categoryName', category.name);
+			}
 		}
+		
 		router.push(`${pathname}?${params.toString()}`);
 	};
 
@@ -187,9 +302,7 @@ export function CategorySidebar() {
 								transition={{ duration: 0.15 }}
 							>
 								<button
-									onClick={() =>
-										handleCategoryClick(category.id, category.name)
-									}
+									onClick={() => handleCategoryClick(category)}
 									className={cn(
 										'w-full text-left px-4 py-3 rounded-lg transition-all flex items-center gap-3 group',
 										currentCategory === category.id ||
@@ -216,21 +329,27 @@ export function CategorySidebar() {
 										)}
 									>
 										{category.name}
-									</span>
-									{category.id !== 'all' &&
-										category.itemQuantity !== undefined && (
-											<Badge
-												variant="outline"
-												className={cn(
-													'ml-auto text-xs',
-													currentCategory === category.id
-														? 'bg-brand-light border-brand'
-														: 'bg-gray-50 border-gray-200 text-gray-500'
-												)}
-											>
-												{category.itemQuantity}
-											</Badge>
+										{category.isGrouped && (
+											<span className="text-xs text-brand-solid ml-1 inline-flex items-center">
+												<span className="bg-brand-light text-brand-solid rounded-md px-1 text-xs font-medium ml-1">
+													{category.relatedCategories.length + 1}
+												</span>
+											</span>
 										)}
+									</span>
+									{category.id !== 'all' && (
+										<Badge
+											variant="outline"
+											className={cn(
+												'ml-auto text-xs',
+												currentCategory === category.id
+													? 'bg-brand-light border-brand'
+													: 'bg-gray-50 border-gray-200 text-gray-500'
+											)}
+										>
+											{category.isGrouped ? category.totalItems : category.itemQuantity}
+										</Badge>
+									)}
 								</button>
 							</motion.div>
 						))}

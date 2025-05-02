@@ -592,9 +592,25 @@ export default function StorePage() {
 			const search = searchQuery || '';
 			const category = categoryId || '';
 			const sort = sortOrder || 'featured';
+			
+			// Verificar se há categoryIds nos parâmetros de URL (para categorias agrupadas)
+			const categoryIdsParam = searchParams.get('categoryIds');
+			let categoryIds: string[] | undefined;
+			
+			if (categoryIdsParam) {
+				try {
+					const parsedIds = JSON.parse(categoryIdsParam);
+					if (Array.isArray(parsedIds) && parsedIds.length > 0) {
+						categoryIds = parsedIds;
+						console.log(`[Store] Usando IDs de categorias agrupadas: ${categoryIds.join(', ')}`);
+					}
+				} catch (e) {
+					console.error('[Store] Erro ao processar categoryIds dos parâmetros URL:', e);
+				}
+			}
 
 			console.log(
-				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}, busca: "${search}", ordenação: "${sort}"${
+				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}${categoryIds ? ' (agrupada)' : ''}, busca: "${search}", ordenação: "${sort}"${
 					append ? ' (anexando resultados)' : ''
 				}`
 			);
@@ -605,8 +621,8 @@ export default function StorePage() {
 			// Usar warehouse específico com base nas configurações
 			let response;
 			try {
-				// Usar a nova função searchWarehouseProducts para busca específica em warehouse
-				response = await searchWarehouseProducts({
+				// Adicionar categoryIds nos parâmetros extras se existir
+				const apiParams: Record<string, any> = {
 					warehouseName: warehouseName,
 					page: currentPage - 1, // API usa base 0 para páginas
 					limit: PRODUCTS_PER_PAGE,
@@ -616,7 +632,15 @@ export default function StorePage() {
 					category: category, // Passar o ID da categoria diretamente
 					skipCache: skipCache, // Ignorar cache apenas quando necessário
 					...extraParams, // Adicionar parâmetros extras
-				});
+				};
+				
+				// Adicionar categoryIds se disponível
+				if (categoryIds && categoryIds.length > 0) {
+					apiParams.categoryIds = JSON.stringify(categoryIds);
+				}
+				
+				// Usar a nova função searchWarehouseProducts para busca específica em warehouse
+				response = await searchWarehouseProducts(apiParams);
 				
 				console.log(`[Store] Resposta da API recebida com sucesso. Produtos totais: ${response?.data?.length || 0}`);
 			} catch (apiError) {
