@@ -47,63 +47,77 @@ export function CategorySidebar() {
 			});
 		}
 
-		// Processar o restante das categorias
-		originalCategories.forEach(category => {
-			// Pular se já foi processada ou é "Todos os produtos"
-			if (processedCategoryIds.has(category.id) || category.id === 'all') {
+		// Primeiro, filtrar as categorias que contêm a palavra "unidade" (em qualquer capitalização)
+		// para que possamos dar prioridade às versões sem "unidade"
+		const hasUnidadeWord = (name: string) => name.toLowerCase().includes('unidade');
+		const categoriesWithoutUnidade = originalCategories.filter(
+			cat => cat.id !== 'all' && !hasUnidadeWord(cat.name)
+		);
+		const categoriesWithUnidade = originalCategories.filter(
+			cat => cat.id !== 'all' && hasUnidadeWord(cat.name)
+		);
+
+		// Primeiro processar categorias sem "unidade"
+		categoriesWithoutUnidade.forEach(category => {
+			// Pular se já foi processada
+			if (processedCategoryIds.has(category.id)) {
 				return;
 			}
 
 			const baseName = category.name.trim();
+			const baseNameLower = baseName.toLowerCase();
 			const relatedCategories: Category[] = [];
 
-			// Encontrar categorias relacionadas (com nome similar)
+			// Encontrar categorias relacionadas com "unidade" no nome
+			categoriesWithUnidade.forEach(unidadeCat => {
+				if (!processedCategoryIds.has(unidadeCat.id)) {
+					// Remover a palavra "unidade" para comparação
+					const unidadeCatWithoutUnidade = unidadeCat.name.replace(/\s*[Uu]nidade\s*/g, '').trim();
+					
+					// Verificar se após remover "unidade", corresponde à categoria base
+					// ou é uma versão singular/plural
+					if (
+						unidadeCatWithoutUnidade.toLowerCase() === baseNameLower ||
+						// Plural check
+						(unidadeCatWithoutUnidade.toLowerCase() + 's' === baseNameLower) ||
+						(baseNameLower + 's' === unidadeCatWithoutUnidade.toLowerCase()) ||
+						// Removing trailing 's'
+						(baseNameLower.endsWith('s') && 
+							baseNameLower.substring(0, baseNameLower.length - 1) === unidadeCatWithoutUnidade.toLowerCase()) ||
+						(unidadeCatWithoutUnidade.toLowerCase().endsWith('s') && 
+							unidadeCatWithoutUnidade.toLowerCase().substring(0, unidadeCatWithoutUnidade.toLowerCase().length - 1) === baseNameLower)
+					) {
+						relatedCategories.push(unidadeCat);
+						processedCategoryIds.add(unidadeCat.id);
+						console.log(`[Sidebar] Oculta categoria com unidade: "${unidadeCat.name}" agrupada com "${category.name}"`);
+					}
+				}
+			});
+
+			// Verificar outras categorias sem "unidade" para agrupamento normal
 			originalCategories.forEach(otherCat => {
 				if (
 					otherCat.id !== category.id && 
 					!processedCategoryIds.has(otherCat.id) &&
-					otherCat.id !== 'all'
+					otherCat.id !== 'all' &&
+					!hasUnidadeWord(otherCat.name)  // Ignorar categorias com "unidade"
 				) {
-					// Converter nomes para minúsculas para comparação case-insensitive
-					const baseNameLower = baseName.toLowerCase();
 					const otherNameLower = otherCat.name.toLowerCase();
 					
-					// Verifica se uma categoria contém a palavra "unidade" (case-insensitive)
-					const hasUnidadeWord = (name: string) => name.toLowerCase().includes('unidade');
-					const baseNameHasUnidade = hasUnidadeWord(baseName);
-					const otherNameHasUnidade = hasUnidadeWord(otherCat.name);
-					
-					// Remover a palavra "unidade" para comparação (case-insensitive)
-					const baseNameWithoutUnidade = baseName.replace(/\s*[Uu]nidade\s*/g, '').trim();
-					const otherNameWithoutUnidade = otherCat.name.replace(/\s*[Uu]nidade\s*/g, '').trim();
-					
-					// Versões em minúsculas para comparação
-					const baseNameWithoutUnidadeLower = baseNameWithoutUnidade.toLowerCase();
-					const otherNameWithoutUnidadeLower = otherNameWithoutUnidade.toLowerCase();
-					
-					// Verifica se uma categoria é o plural/singular da outra (case-insensitive)
-					// Lida com regras básicas de plural em português
+					// Verificar se uma categoria é o plural/singular da outra (case-insensitive)
 					const isSingularPluralMatch = (
 						// Base com 's' no final = otherName (ex: Nootrópicos = Nootrópico)
-						(baseNameWithoutUnidadeLower.endsWith('s') && 
-							baseNameWithoutUnidadeLower.substring(0, baseNameWithoutUnidadeLower.length - 1) === otherNameWithoutUnidadeLower) ||
+						(baseNameLower.endsWith('s') && 
+							baseNameLower.substring(0, baseNameLower.length - 1) === otherNameLower) ||
 						// OtherName com 's' no final = baseName (ex: Nootrópico = Nootrópicos)
-						(otherNameWithoutUnidadeLower.endsWith('s') && 
-							otherNameWithoutUnidadeLower.substring(0, otherNameWithoutUnidadeLower.length - 1) === baseNameWithoutUnidadeLower) ||
+						(otherNameLower.endsWith('s') && 
+							otherNameLower.substring(0, otherNameLower.length - 1) === baseNameLower) ||
 						// Comparação clássica de adicionar 's' 
-						(baseNameWithoutUnidadeLower + 's' === otherNameWithoutUnidadeLower) || 
-						(otherNameWithoutUnidadeLower + 's' === baseNameWithoutUnidadeLower)
+						(baseNameLower + 's' === otherNameLower) || 
+						(otherNameLower + 's' === baseNameLower)
 					);
 					
-					// Verificar se são a mesma categoria, mas uma tem "unidade" e outra não (case-insensitive)
-					const isUnidadeVariant = (
-						(baseNameHasUnidade && !otherNameHasUnidade && 
-							baseNameWithoutUnidadeLower === otherNameWithoutUnidadeLower) ||
-						(!baseNameHasUnidade && otherNameHasUnidade && 
-							baseNameWithoutUnidadeLower === otherNameWithoutUnidadeLower)
-					);
-					
-					// Verificar se uma categoria é prefixo da outra (regra original)
+					// Verificar se uma categoria é prefixo da outra
 					const isPrefixMatch = (
 						otherNameLower.startsWith(baseNameLower) &&
 						otherNameLower !== baseNameLower &&
@@ -117,10 +131,10 @@ export function CategorySidebar() {
 					);
 					
 					// Se qualquer uma das condições for atendida, agrupar as categorias
-					if (isPrefixMatch || isUnidadeVariant || isSingularPluralMatch) {
+					if (isPrefixMatch || isSingularPluralMatch) {
 						relatedCategories.push(otherCat);
 						processedCategoryIds.add(otherCat.id);
-						console.log(`[Sidebar] Agrupada: "${otherCat.name}" com "${category.name}" | Motivo: ${isPrefixMatch ? 'prefixo' : isUnidadeVariant ? 'variante unidade' : 'singular/plural'}`);
+						console.log(`[Sidebar] Agrupada: "${otherCat.name}" com "${category.name}" | Motivo: ${isPrefixMatch ? 'prefixo' : 'singular/plural'}`);
 					}
 				}
 			});
@@ -128,7 +142,7 @@ export function CategorySidebar() {
 			// Marcar esta categoria como processada
 			processedCategoryIds.add(category.id);
 
-			// Se encontrou categorias relacionadas, criar um grupo
+			// Adicionar a categoria ao resultado final (mesmo sem relacionadas)
 			if (relatedCategories.length > 0) {
 				// Calcular o total de itens
 				const totalItems = (category.itemQuantity || 0) + 
@@ -141,8 +155,6 @@ export function CategorySidebar() {
 					relatedCategories: relatedCategories.map(cat => cat.id),
 					totalItems
 				});
-				
-				console.log(`[Sidebar] Categoria agrupada: "${category.name}" com ${relatedCategories.length} relacionadas: ${relatedCategories.map(cat => `"${cat.name}"`).join(', ')}`);
 			} else {
 				// Adicionar como categoria individual
 				result.push({
@@ -153,6 +165,9 @@ export function CategorySidebar() {
 				});
 			}
 		});
+
+		// Não adicionar categorias com "unidade" não agrupadas, elas ficarão invisíveis
+		// Removendo o código que antes processava as categorias com "unidade" restantes
 
 		return result;
 	};
