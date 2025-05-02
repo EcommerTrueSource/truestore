@@ -614,6 +614,7 @@ export default function StorePage() {
 					active: true,
 					term: search, // Usar o termo de busca como parâmetro term
 					category: category, // Passar o ID da categoria diretamente
+					sort: sort, // Passar o parâmetro de ordenação
 					skipCache: skipCache, // Ignorar cache apenas quando necessário
 					...extraParams, // Adicionar parâmetros extras
 				});
@@ -693,9 +694,10 @@ export default function StorePage() {
 				console.log(`[Store] Produtos com estoque disponível: ${withStock} de ${productsData.length} (${withStock > 0 ? Math.round(withStock/productsData.length*100) : 0}%)`);
 			}
 
-			// Ordenar os produtos no lado do cliente, já que a API não suporta ordenação
+			// Ordenar os produtos no lado do cliente, apenas se necessário (quando a API não suportar a ordenação solicitada)
+			// Isso serve como backup no caso da API não processar o parâmetro de ordenação
 			if (sort && sort !== 'featured') {
-				console.log(`[Store] Ordenando produtos por: ${sort}`);
+				console.log(`[Store] Verificando se é necessário ordenar produtos no cliente por: ${sort}`);
 				filteredProducts = [...filteredProducts].sort((a, b) => {
 					switch (sort) {
 						case 'price-asc':
@@ -739,6 +741,7 @@ export default function StorePage() {
 					const combinedProducts = [...prev, ...newProducts];
 
 					// Se temos uma ordenação ativa, aplicar novamente em toda a lista
+					// Isso garante que todos os produtos, antigos e novos, sigam a mesma ordenação
 					if (sort && sort !== 'featured') {
 						console.log(`[Store] Reordenando lista combinada por: ${sort}`);
 						return combinedProducts.sort((a, b) => {

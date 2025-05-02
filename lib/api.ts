@@ -1351,6 +1351,7 @@ export async function searchProductsByTerm({
  * @param active Filtrar apenas produtos ativos (default: true)
  * @param term Termo para pesquisa de produtos (opcional)
  * @param category ID da categoria para filtrar produtos (opcional)
+ * @param sort Parâmetro de ordenação (opcional)
  * @param skipCache Flag para forçar ignorar o cache (opcional)
  */
 export async function searchWarehouseProducts({
@@ -1361,6 +1362,7 @@ export async function searchWarehouseProducts({
   active = true,
   term = '',
   category = '',
+  sort = '',
   skipCache = false
 }: {
   warehouseName?: string;
@@ -1370,11 +1372,12 @@ export async function searchWarehouseProducts({
   active?: boolean;
   term?: string;
   category?: string;
+  sort?: string;
   skipCache?: boolean;
 } = {}) {
   try {
     console.log(`[API] Buscando produtos no warehouse ${warehouseName} com parâmetros: ${JSON.stringify({
-      page, limit, inStock, active, term, category
+      page, limit, inStock, active, term, category, sort
     })}`);
 
     const queryParams = new URLSearchParams({
@@ -1395,6 +1398,12 @@ export async function searchWarehouseProducts({
     if (category && category.trim()) {
       queryParams.append('category', category.trim());
       console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName}`);
+    }
+
+    // Adicionar o parâmetro de ordenação se fornecido
+    if (sort && sort.trim()) {
+      queryParams.append('sort', sort.trim());
+      console.log(`[API] Ordenando produtos por: ${sort} no warehouse: ${warehouseName}`);
     }
 
     // Adicionar timestamp apenas se skipCache for true
