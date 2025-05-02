@@ -693,26 +693,25 @@ export default function StorePage() {
 				console.log(`[Store] Produtos com estoque disponível: ${withStock} de ${productsData.length} (${withStock > 0 ? Math.round(withStock/productsData.length*100) : 0}%)`);
 			}
 
-			// Ordenar os produtos no lado do cliente, apenas se necessário (quando a API não suportar a ordenação solicitada)
-			// Isso serve como backup no caso da API não processar o parâmetro de ordenação
-			if (sort && sort !== 'featured') {
-				console.log(`[Store] Verificando se é necessário ordenar produtos no cliente por: ${sort}`);
-				filteredProducts = [...filteredProducts].sort((a, b) => {
-					switch (sort) {
-						case 'price-asc':
-							return a.price - b.price;
-						case 'price-desc':
-							return b.price - a.price;
-						case 'name-asc':
-							return a.name.localeCompare(b.name);
-						case 'name-desc':
-							return b.name.localeCompare(a.name);
-						default:
-							return 0;
-					}
-				});
-				console.log(`[Store] Produtos ordenados com sucesso`);
-			}
+			// Ordenar os produtos sempre no lado do cliente
+			// Os dados já vêm do backend, ordenamos aqui conforme a preferência do usuário
+			console.log(`[Store] Ordenando produtos no cliente por: ${sort}`);
+			filteredProducts = [...filteredProducts].sort((a, b) => {
+				switch (sort) {
+					case 'price-asc':
+						return a.price - b.price;
+					case 'price-desc':
+						return b.price - a.price;
+					case 'name-asc':
+						return a.name.localeCompare(b.name);
+					case 'name-desc':
+						return b.name.localeCompare(a.name);
+					case 'featured':
+					default:
+						// Para "featured" ou valores padrão, manter a ordem original
+						return 0;
+				}
+			});
 
 			// Se estamos anexando a uma lista existente, mesclar resultados
 			// Caso contrário, substituir a lista atual
@@ -739,27 +738,24 @@ export default function StorePage() {
 					// Combinar produtos existentes com novos produtos
 					const combinedProducts = [...prev, ...newProducts];
 
-					// Se temos uma ordenação ativa, aplicar novamente em toda a lista
-					// Isso garante que todos os produtos, antigos e novos, sigam a mesma ordenação
-					if (sort && sort !== 'featured') {
-						console.log(`[Store] Reordenando lista combinada por: ${sort}`);
-						return combinedProducts.sort((a, b) => {
-							switch (sort) {
-								case 'price-asc':
-									return a.price - b.price;
-								case 'price-desc':
-									return b.price - a.price;
-								case 'name-asc':
-									return a.name.localeCompare(b.name);
-								case 'name-desc':
-									return b.name.localeCompare(a.name);
-								default:
-									return 0;
-							}
-						});
-					}
-
-					return combinedProducts;
+					// Sempre reordenar a lista combinada para manter a consistência
+					console.log(`[Store] Reordenando lista combinada por: ${sort}`);
+					return combinedProducts.sort((a, b) => {
+						switch (sort) {
+							case 'price-asc':
+								return a.price - b.price;
+							case 'price-desc':
+								return b.price - a.price;
+							case 'name-asc':
+								return a.name.localeCompare(b.name);
+							case 'name-desc':
+								return b.name.localeCompare(a.name);
+							case 'featured':
+							default:
+								// Para "featured" ou valores padrão, manter a ordem original
+								return 0;
+						}
+					});
 				} else {
 					console.log(
 						`[Store] Substituindo produtos existentes por ${filteredProducts.length} novos produtos`
@@ -828,7 +824,7 @@ export default function StorePage() {
 				loadProducts(nextPage, true, { _t: Date.now() });
 			}, 500);
 		}
-	}, [isLoadingMore, hasMore, page, loadProducts, sortOrder]);
+	}, [isLoadingMore, hasMore, page, loadProducts]);
 
 	// Configurar o observador de interseção para o carregamento infinito
 	useEffect(() => {
@@ -941,6 +937,35 @@ export default function StorePage() {
 			router.push('/login');
 		}
 	}, [router, isAuthenticated, isLoading]);
+
+	// Efeito para reordenar os produtos quando o parâmetro de ordenação mudar
+	useEffect(() => {
+		// Se não temos produtos ou a página não está pronta, não fazer nada
+		if (products.length === 0 || !pageReady) return;
+
+		console.log(`[StorePage] Parâmetro de ordenação alterado para: ${sortOrder}, reordenando produtos...`);
+		
+		// Atualizar os produtos com a nova ordenação
+		setProducts(prevProducts => {
+			const newProducts = [...prevProducts].sort((a, b) => {
+				switch (sortOrder) {
+					case 'price-asc':
+						return a.price - b.price;
+					case 'price-desc':
+						return b.price - a.price;
+					case 'name-asc':
+						return a.name.localeCompare(b.name);
+					case 'name-desc':
+						return b.name.localeCompare(a.name);
+					case 'featured':
+					default:
+						// Para "featured" ou valores padrão, manter a ordem original
+						return 0;
+				}
+			});
+			return newProducts;
+		});
+	}, [sortOrder, pageReady]);
 
 	return (
 		<StoreLayout hideSidebar={!pageReady}>

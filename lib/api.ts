@@ -1397,8 +1397,6 @@ export async function searchWarehouseProducts({
       console.log(`[API] Filtrando produtos pela categoria ID: ${category} no warehouse: ${warehouseName}`);
     }
 
-    // Adicionar o parâmetro de ordenação se fornecido
-
     // Adicionar timestamp apenas se skipCache for true
     if (skipCache) {
       queryParams.append('_t', Date.now().toString());
