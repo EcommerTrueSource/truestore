@@ -330,10 +330,8 @@ export function CategorySidebar() {
 									>
 										{category.name}
 										{category.isGrouped && (
-											<span className="text-xs text-brand-solid ml-1 inline-flex items-center">
-												<span className="bg-brand-light text-brand-solid rounded-md px-1 text-xs font-medium ml-1">
-													{category.relatedCategories.length + 1}
-												</span>
+											<span className="text-xs text-brand-solid ml-1">
+												{' '}(grupo)
 											</span>
 										)}
 									</span>
