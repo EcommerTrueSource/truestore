@@ -307,12 +307,12 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 					</DropdownMenuGroup>
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
-						<DropdownMenuItem asChild>
+						{/* <DropdownMenuItem asChild>
 							<Link href="/settings" className="cursor-pointer">
 								<Settings className="mr-2 h-4 w-4" />
 								Configurações
 							</Link>
-						</DropdownMenuItem>
+						</DropdownMenuItem> */}
 						{/* <DropdownMenuItem asChild>
 							<Link href="/ajuda" className="cursor-pointer">
 								<HelpCircle className="mr-2 h-4 w-4" />
