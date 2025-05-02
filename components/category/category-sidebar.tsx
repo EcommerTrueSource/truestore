@@ -329,11 +329,6 @@ export function CategorySidebar() {
 										)}
 									>
 										{category.name}
-										{category.isGrouped && (
-											<span className="text-xs text-brand-solid ml-1">
-												{' '}(grupo)
-											</span>
-										)}
 									</span>
 									{category.id !== 'all' && (
 										<Badge
