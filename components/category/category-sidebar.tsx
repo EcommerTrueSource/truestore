@@ -64,32 +64,49 @@ export function CategorySidebar() {
 					!processedCategoryIds.has(otherCat.id) &&
 					otherCat.id !== 'all'
 				) {
-					// Verifica se uma categoria contém a palavra "Unidade"
-					const hasUnidadeWord = (name: string) => name.includes('Unidade');
+					// Converter nomes para minúsculas para comparação case-insensitive
+					const baseNameLower = baseName.toLowerCase();
+					const otherNameLower = otherCat.name.toLowerCase();
+					
+					// Verifica se uma categoria contém a palavra "unidade" (case-insensitive)
+					const hasUnidadeWord = (name: string) => name.toLowerCase().includes('unidade');
 					const baseNameHasUnidade = hasUnidadeWord(baseName);
 					const otherNameHasUnidade = hasUnidadeWord(otherCat.name);
 					
-					// Remover a palavra "Unidade" para comparação
-					const baseNameWithoutUnidade = baseName.replace(/\s*Unidade\s*/, '').trim();
-					const otherNameWithoutUnidade = otherCat.name.replace(/\s*Unidade\s*/, '').trim();
+					// Remover a palavra "unidade" para comparação (case-insensitive)
+					const baseNameWithoutUnidade = baseName.replace(/\s*[Uu]nidade\s*/g, '').trim();
+					const otherNameWithoutUnidade = otherCat.name.replace(/\s*[Uu]nidade\s*/g, '').trim();
 					
-					// Verifica se uma categoria é o plural/singular da outra
-					// Exemplo: "Nootrópico" e "Nootrópicos"
+					// Versões em minúsculas para comparação
+					const baseNameWithoutUnidadeLower = baseNameWithoutUnidade.toLowerCase();
+					const otherNameWithoutUnidadeLower = otherNameWithoutUnidade.toLowerCase();
+					
+					// Verifica se uma categoria é o plural/singular da outra (case-insensitive)
+					// Lida com regras básicas de plural em português
 					const isSingularPluralMatch = (
-						(baseNameWithoutUnidade + 's' === otherNameWithoutUnidade) || 
-						(otherNameWithoutUnidade + 's' === baseNameWithoutUnidade)
+						// Base com 's' no final = otherName (ex: Nootrópicos = Nootrópico)
+						(baseNameWithoutUnidadeLower.endsWith('s') && 
+							baseNameWithoutUnidadeLower.substring(0, baseNameWithoutUnidadeLower.length - 1) === otherNameWithoutUnidadeLower) ||
+						// OtherName com 's' no final = baseName (ex: Nootrópico = Nootrópicos)
+						(otherNameWithoutUnidadeLower.endsWith('s') && 
+							otherNameWithoutUnidadeLower.substring(0, otherNameWithoutUnidadeLower.length - 1) === baseNameWithoutUnidadeLower) ||
+						// Comparação clássica de adicionar 's' 
+						(baseNameWithoutUnidadeLower + 's' === otherNameWithoutUnidadeLower) || 
+						(otherNameWithoutUnidadeLower + 's' === baseNameWithoutUnidadeLower)
 					);
 					
-					// Verificar se são a mesma categoria, mas uma tem "Unidade" e outra não
+					// Verificar se são a mesma categoria, mas uma tem "unidade" e outra não (case-insensitive)
 					const isUnidadeVariant = (
-						(baseNameHasUnidade && !otherNameHasUnidade && baseNameWithoutUnidade === otherNameWithoutUnidade) ||
-						(!baseNameHasUnidade && otherNameHasUnidade && baseNameWithoutUnidade === otherNameWithoutUnidade)
+						(baseNameHasUnidade && !otherNameHasUnidade && 
+							baseNameWithoutUnidadeLower === otherNameWithoutUnidadeLower) ||
+						(!baseNameHasUnidade && otherNameHasUnidade && 
+							baseNameWithoutUnidadeLower === otherNameWithoutUnidadeLower)
 					);
 					
 					// Verificar se uma categoria é prefixo da outra (regra original)
 					const isPrefixMatch = (
-						otherCat.name.startsWith(baseName) &&
-						otherCat.name !== baseName &&
+						otherNameLower.startsWith(baseNameLower) &&
+						otherNameLower !== baseNameLower &&
 						(
 							// Verificar se tem um espaço após o nome base
 							otherCat.name.substring(baseName.length, baseName.length + 1) === ' ' ||
@@ -103,6 +120,7 @@ export function CategorySidebar() {
 					if (isPrefixMatch || isUnidadeVariant || isSingularPluralMatch) {
 						relatedCategories.push(otherCat);
 						processedCategoryIds.add(otherCat.id);
+						console.log(`[Sidebar] Agrupada: "${otherCat.name}" com "${category.name}" | Motivo: ${isPrefixMatch ? 'prefixo' : isUnidadeVariant ? 'variante unidade' : 'singular/plural'}`);
 					}
 				}
 			});
