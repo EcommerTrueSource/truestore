@@ -62,22 +62,48 @@ export function CategorySidebar() {
 				if (
 					otherCat.id !== category.id && 
 					!processedCategoryIds.has(otherCat.id) &&
-					otherCat.id !== 'all' &&
-					otherCat.name.startsWith(baseName) &&
-					otherCat.name !== baseName &&
-					// Verificar se o nome da categoria realmente tem um complemento para o nome base
-					// Por exemplo: "Barrinhas" e "Barrinhas Unidade" - o segundo tem um complemento após o nome base
-					// Mas "Barrinhas" e "Barras" não devem agrupar, pois são categorias distintas
-					(
-						// Verificar se tem um espaço após o nome base
-						otherCat.name.substring(baseName.length, baseName.length + 1) === ' ' ||
-						// Ou se tem um caractere especial como hífen, underline, etc.
-						otherCat.name.substring(baseName.length, baseName.length + 1) === '-' ||
-						otherCat.name.substring(baseName.length, baseName.length + 1) === '_'
-					)
+					otherCat.id !== 'all'
 				) {
-					relatedCategories.push(otherCat);
-					processedCategoryIds.add(otherCat.id);
+					// Verifica se uma categoria contém a palavra "Unidade"
+					const hasUnidadeWord = (name: string) => name.includes('Unidade');
+					const baseNameHasUnidade = hasUnidadeWord(baseName);
+					const otherNameHasUnidade = hasUnidadeWord(otherCat.name);
+					
+					// Remover a palavra "Unidade" para comparação
+					const baseNameWithoutUnidade = baseName.replace(/\s*Unidade\s*/, '').trim();
+					const otherNameWithoutUnidade = otherCat.name.replace(/\s*Unidade\s*/, '').trim();
+					
+					// Verifica se uma categoria é o plural/singular da outra
+					// Exemplo: "Nootrópico" e "Nootrópicos"
+					const isSingularPluralMatch = (
+						(baseNameWithoutUnidade + 's' === otherNameWithoutUnidade) || 
+						(otherNameWithoutUnidade + 's' === baseNameWithoutUnidade)
+					);
+					
+					// Verificar se são a mesma categoria, mas uma tem "Unidade" e outra não
+					const isUnidadeVariant = (
+						(baseNameHasUnidade && !otherNameHasUnidade && baseNameWithoutUnidade === otherNameWithoutUnidade) ||
+						(!baseNameHasUnidade && otherNameHasUnidade && baseNameWithoutUnidade === otherNameWithoutUnidade)
+					);
+					
+					// Verificar se uma categoria é prefixo da outra (regra original)
+					const isPrefixMatch = (
+						otherCat.name.startsWith(baseName) &&
+						otherCat.name !== baseName &&
+						(
+							// Verificar se tem um espaço após o nome base
+							otherCat.name.substring(baseName.length, baseName.length + 1) === ' ' ||
+							// Ou se tem um caractere especial como hífen, underline, etc.
+							otherCat.name.substring(baseName.length, baseName.length + 1) === '-' ||
+							otherCat.name.substring(baseName.length, baseName.length + 1) === '_'
+						)
+					);
+					
+					// Se qualquer uma das condições for atendida, agrupar as categorias
+					if (isPrefixMatch || isUnidadeVariant || isSingularPluralMatch) {
+						relatedCategories.push(otherCat);
+						processedCategoryIds.add(otherCat.id);
+					}
 				}
 			});
 
