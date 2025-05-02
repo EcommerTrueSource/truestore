@@ -614,7 +614,6 @@ export default function StorePage() {
 					active: true,
 					term: search, // Usar o termo de busca como parâmetro term
 					category: category, // Passar o ID da categoria diretamente
-					sort: sort, // Passar o parâmetro de ordenação
 					skipCache: skipCache, // Ignorar cache apenas quando necessário
 					...extraParams, // Adicionar parâmetros extras
 				});
