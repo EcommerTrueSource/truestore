@@ -61,10 +61,10 @@ export function StoreBanner({
 		const fetchBanner = async () => {
 			if (!mounted) return;
 
-			// Verificar se já buscamos recentemente (menos de 30 segundos atrás)
+			// Verificar se já buscamos recentemente
 			const now = Date.now();
 			const timeSinceLastFetch = now - lastFetchTime;
-			const CACHE_DURATION = 30 * 1000; // 30 segundos
+			const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos (300 segundos)
 
 			if (
 				lastFetchTime > 0 &&
@@ -72,17 +72,20 @@ export function StoreBanner({
 				bannerUrl
 			) {
 				console.log(
-					`[StoreBanner] Banner carregado recentemente (${Math.round(
+					`[StoreBanner] Banner dentro do período de cache (${Math.round(
 						timeSinceLastFetch / 1000
-					)}s atrás), mantendo existente`
+					)}s de ${CACHE_DURATION / 1000}s), mantendo existente`
 				);
-				setIsLoading(false); // Garantir que não mostre loading
+				setIsLoading(false);
 				return;
 			}
 
 			try {
-				// Se já temos um banner anterior, não mostrar o skeleton de loading
-				if (!bannerUrl) {
+				// Se já temos um banner anterior, nunca mostrar o skeleton de loading
+				// Isso mantém o banner anterior visível enquanto o novo carrega
+				if (bannerUrl) {
+					setIsLoading(false);
+				} else {
 					setIsLoading(true);
 				}
 				setError(false);
