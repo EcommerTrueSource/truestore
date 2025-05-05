@@ -188,7 +188,8 @@ export async function POST(request: NextRequest) {
         paymentMethod: "pix",
         shippingAddress: formattedAddress,
         shippingCarrier: "Total Express",
-        nome_deposito: warehouse
+        nome_deposito: warehouse,
+        source: "truestore"
       };
       
       console.log('[Orders API] Dados do pedido formatados:', JSON.stringify(orderData));
