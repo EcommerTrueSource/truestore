@@ -20,17 +20,34 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
+interface ProductImage {
+	url: string;
+}
+
+interface Product {
+	id: string;
+	name: string;
+	images?: string[];
+}
+
 interface OrderItem {
 	id: number;
+	productId?: string;
 	name: string;
 	price: number;
 	quantity: number;
 	image?: string;
+	__product__?: Product;
+	__has_product__?: boolean;
 }
 
 interface OrderData {
+	id?: string;
 	name: string;
 	phone: string;
+	status?: string;
+	paymentMethod?: string;
+	shippingCarrier?: string;
 	delivery: {
 		zipCode: string;
 		street: string;
@@ -43,7 +60,9 @@ interface OrderData {
 	};
 	observations: string;
 	items: OrderItem[];
+	__items__?: OrderItem[];
 	timestamp: string;
+	createdAt?: string;
 }
 
 export default function ConfirmationPage() {
@@ -54,6 +73,7 @@ export default function ConfirmationPage() {
 	const [orderDate, setOrderDate] = useState('');
 	const [orderTime, setOrderTime] = useState('');
 	const [copySuccess, setCopySuccess] = useState(false);
+	const [processedItems, setProcessedItems] = useState<OrderItem[]>([]);
 
 	useEffect(() => {
 		// Simulação de carregamento de dados com tempo reduzido
@@ -62,16 +82,32 @@ export default function ConfirmationPage() {
 				const storedOrder = sessionStorage.getItem('orderData');
 				if (storedOrder) {
 					const parsedOrder = JSON.parse(storedOrder);
+					console.log('Dados do pedido carregados:', parsedOrder);
 					setOrderData(parsedOrder);
 
-					// Gerar número de pedido aleatório
-					const randomOrderNumber = `P${Math.floor(
-						100000 + Math.random() * 900000
-					)}`;
-					setOrderNumber(randomOrderNumber);
+					// Usar o ID real do pedido se disponível, ou gerar um aleatório como fallback
+					if (parsedOrder.id) {
+						setOrderNumber(parsedOrder.id);
+					} else {
+						// Fallback para o caso de não haver ID
+						const randomOrderNumber = `P${Math.floor(
+							100000 + Math.random() * 900000
+						)}`;
+						setOrderNumber(randomOrderNumber);
+						console.warn(
+							'ID do pedido não encontrado, usando número gerado aleatoriamente'
+						);
+					}
 
-					// Formatar data e hora
-					const orderDateTime = new Date(parsedOrder.timestamp);
+					// Processar e normalizar os itens para exibição
+					const items = processOrderItems(parsedOrder);
+					setProcessedItems(items);
+
+					// Formatar data e hora usando createdAt da API ou timestamp do sessionStorage
+					const orderDateTime = parsedOrder.createdAt
+						? new Date(parsedOrder.createdAt)
+						: new Date(parsedOrder.timestamp);
+
 					setOrderDate(
 						new Intl.DateTimeFormat('pt-BR', {
 							day: '2-digit',
@@ -95,9 +131,34 @@ export default function ConfirmationPage() {
 		}, 300);
 	}, []);
 
+	// Função para processar e normalizar itens do pedido
+	const processOrderItems = (order: OrderData): OrderItem[] => {
+		// Verificar se temos o formato da API (__items__) ou formato padrão (items)
+		if (order.__items__ && order.__items__.length > 0) {
+			// Formato da API
+			return order.__items__.map((item) => ({
+				id:
+					typeof item.id === 'number'
+						? item.id
+						: parseInt(item.id as any, 10) || Math.random(),
+				name: item.__product__?.name || item.name || 'Produto',
+				price: parseFloat(item.price as any) || 0,
+				quantity: item.quantity || 1,
+				// Obter imagem do produto se disponível
+				image:
+					item.__product__?.images && item.__product__.images.length > 0
+						? item.__product__.images[0]
+						: undefined,
+			}));
+		}
+
+		// Formato padrão já existente
+		return order.items || [];
+	};
+
 	const calculateTotal = () => {
-		if (!orderData?.items) return 0;
-		return orderData.items.reduce(
+		if (!processedItems || processedItems.length === 0) return 0;
+		return processedItems.reduce(
 			(sum, item) => sum + item.price * item.quantity,
 			0
 		);
@@ -216,7 +277,7 @@ export default function ConfirmationPage() {
 								<CardContent className="p-4">
 									<div className="space-y-4">
 										<div className="space-y-3">
-											{orderData.items.map((item) => (
+											{processedItems.map((item) => (
 												<div key={item.id} className="flex items-start gap-3">
 													<div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded overflow-hidden">
 														{item.image ? (
@@ -224,6 +285,20 @@ export default function ConfirmationPage() {
 																src={item.image}
 																alt={item.name}
 																className="h-full w-full object-cover"
+																onError={(e) => {
+																	// Fallback se a imagem falhar
+																	(e.target as HTMLImageElement).style.display =
+																		'none';
+																	(
+																		e.target as HTMLImageElement
+																	).parentElement!.innerHTML = `
+																		<div class="h-full w-full flex items-center justify-center">
+																			<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400">
+																				<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+																			</svg>
+																		</div>
+																	`;
+																}}
 															/>
 														) : (
 															<div className="h-full w-full flex items-center justify-center">
@@ -340,6 +415,25 @@ export default function ConfirmationPage() {
 										</div>
 										<span className="text-sm font-medium">{orderTime}</span>
 									</div>
+
+									{/* Exibir status do pedido se disponível */}
+									{orderData.status && (
+										<div className="flex justify-between items-center mt-2">
+											<div className="flex items-center gap-2">
+												<CheckCircle className="h-4 w-4 text-gray-500" />
+												<span className="text-sm text-gray-600">Status</span>
+											</div>
+											<span className="text-sm font-medium">
+												{orderData.status === 'PENDING'
+													? 'Pendente'
+													: orderData.status === 'COMPLETED'
+													? 'Concluído'
+													: orderData.status === 'CANCELED'
+													? 'Cancelado'
+													: orderData.status}
+											</span>
+										</div>
+									)}
 								</CardContent>
 							</Card>
 						</div>
@@ -353,9 +447,9 @@ export default function ConfirmationPage() {
 							Continuar Comprando
 							<ArrowRight className="ml-2 h-4 w-4" />
 						</Button>
-						<p className="mt-4 text-sm text-gray-500">
+						{/* <p className="mt-4 text-sm text-gray-500">
 							Um email com os detalhes do pedido foi enviado para você.
-						</p>
+						</p> */}
 					</div>
 				</div>
 			</div>
