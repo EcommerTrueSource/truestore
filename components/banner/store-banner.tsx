@@ -23,25 +23,29 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				setIsLoading(true);
 				setError(false);
 				
-				// Verificar se temos um token válido
-				if (!tokenStore.hasValidToken()) {
-					console.warn('[StoreBanner] Token não encontrado ou inválido');
-					throw new Error('Token inválido');
-				}
-
-				// Obter o token para a chamada
+				console.log('[StoreBanner] Iniciando busca do banner...');
+				
+				// Verificar se há um token disponível
 				const token = tokenStore.getToken();
-				console.log('[StoreBanner] Token obtido, buscando banner...');
-
-				// Fazer requisição REST com opções apropriadas
+				console.log(`[StoreBanner] Token disponível: ${!!token}`);
+				
+				// Configurar headers com ou sem token de autenticação
+				const headers: HeadersInit = {
+					'Accept': 'application/json',
+				};
+				
+				if (token) {
+					headers['Authorization'] = `Bearer ${token}`;
+				}
+				
+				// Fazer requisição REST para obter o banner
 				const response = await fetch('/api/marketing/campaign/banner', {
 					method: 'GET',
-					headers: {
-						'Accept': 'application/json',
-						'Authorization': `Bearer ${token}`,
-					},
-					next: { revalidate: 60 }, // Cache por 1 minuto
+					headers,
+					cache: 'no-store', // Evita cache para sempre obter o banner mais recente
 				});
+
+				console.log(`[StoreBanner] Status da resposta: ${response.status}`);
 
 				if (!response.ok) {
 					console.error(`[StoreBanner] Erro HTTP: ${response.status}`);
@@ -56,6 +60,7 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				}
 
 				const data = await response.json();
+				console.log('[StoreBanner] Dados recebidos:', data);
 				
 				// Verificar se a resposta contém uma URL de banner válida
 				if (data && data.imageUrl) {

@@ -20,17 +20,32 @@ export async function GET(request: NextRequest) {
     const token = TrueCore.extractToken(request);
     console.log(`[API Banner] Token encontrado: ${token ? 'Sim' : 'Não'}`);
     
-    // URL completa do endpoint
+    // Verificar se existe um token válido
+    if (!token) {
+      console.warn('[API Banner] Token não encontrado, usando banner padrão');
+      return NextResponse.json(
+        { imageUrl: '/placeholder-banner-true.png' },
+        { 
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, max-age=0'
+          }
+        }
+      );
+    }
+    
+    // URL completa do endpoint - usando o endpoint correto que requer autenticação
     const apiUrl = `${baseUrl}/marketing/campaign/banner`;
     console.log(`[API Banner] Fazendo requisição para: ${apiUrl}`);
     
-    // Fazer requisição diretamente ao endpoint
+    // Fazer requisição diretamente ao endpoint com o token
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        'Authorization': `Bearer ${token}`
       },
       cache: 'no-store'
     });
@@ -55,6 +70,22 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error(`[API Banner] Erro: ${error?.message || 'Desconhecido'}`);
+    
+    // Verificar se o erro é devido à indisponibilidade do backend
+    // Neste caso, retornamos um banner padrão em vez de um erro
+    if (error?.message?.includes('fetch') || error?.message?.includes('network')) {
+      console.log('[API Banner] Erro de conexão com o backend, retornando banner padrão');
+      return NextResponse.json(
+        { imageUrl: '/placeholder-banner-true.png' },
+        { 
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, max-age=0'
+          }
+        }
+      );
+    }
     
     // Retornar erro como JSON para evitar HTML
     return NextResponse.json(
