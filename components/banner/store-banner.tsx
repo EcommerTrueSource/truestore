@@ -27,19 +27,18 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				const token = tokenStore.getToken();
 				console.log(`[StoreBanner] Token disponível: ${!!token}`);
 				
-				if (!token) {
-					console.warn('[StoreBanner] Sem token disponível. Usando placeholder.');
-					setError(true);
-					return;
-				}
-				
+				// Mesmo sem token, vamos tentar buscar o banner 
+				// A API deve lidar com requisições não autenticadas
 				console.log('[StoreBanner] Iniciando busca do banner...');
 				
-				// Configurar headers com token de autenticação
+				// Configurar headers com ou sem token de autenticação
 				const headers: HeadersInit = {
 					'Accept': 'application/json',
-					'Authorization': `Bearer ${token}`
 				};
+				
+				if (token) {
+					headers['Authorization'] = `Bearer ${token}`;
+				}
 				
 				// Fazer requisição REST para obter o banner
 				console.log('[StoreBanner] Enviando requisição para /api/marketing/campaign/banner');

@@ -21,49 +21,61 @@ export async function GET(request: NextRequest) {
     
   console.log(`[API Banner] URL da API base: ${baseUrl}`);
   
-  try {
-    // Obter o token de autenticação
-    const token = TrueCore.extractToken(request);
-    console.log(`[API Banner] Token encontrado: ${token ? 'Sim' : 'Não'}`);
+  // Função para buscar o banner de um endpoint específico
+  const fetchBannerFromEndpoint = async (url: string, authToken: string | null = null) => {
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
     
-    // Verificar se existe um token válido
-    if (!token) {
-      console.warn('[API Banner] Token não encontrado, usando banner padrão');
-      return NextResponse.json(
-        { imageUrl: '/placeholder-banner-true.png' },
-        { 
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store, max-age=0'
-          }
-        }
-      );
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
     }
     
-    // URL completa do endpoint - usando o endpoint correto
-    const apiUrl = `${baseUrl}/marketing/campaign/banner`;
-    console.log(`[API Banner] Fazendo requisição para: ${apiUrl}`);
+    console.log(`[API Banner] Tentando obter banner de: ${url}`);
     
-    // Fazer requisição diretamente ao endpoint com o token
-    const response = await fetch(apiUrl, {
+    const response = await fetch(url, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers,
       cache: 'no-store'
     });
-    
-    console.log(`[API Banner] Status da resposta: ${response.status}`);
     
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
     }
     
-    // Obter o JSON da resposta
-    const data = await response.json();
+    return await response.json();
+  };
+  
+  try {
+    // Obter o token de autenticação
+    const token = TrueCore.extractToken(request);
+    console.log(`[API Banner] Token encontrado: ${token ? 'Sim' : 'Não'}`);
+    
+    let data;
+    
+    // Primeiro, tentamos o endpoint autenticado se tiver token
+    if (token) {
+      try {
+        const authenticatedUrl = `${baseUrl}/marketing/campaign/banner`;
+        console.log(`[API Banner] Tentando endpoint autenticado: ${authenticatedUrl}`);
+        data = await fetchBannerFromEndpoint(authenticatedUrl, token);
+        console.log('[API Banner] Banner obtido com sucesso do endpoint autenticado');
+      } catch (error) {
+        console.warn('[API Banner] Falha ao obter do endpoint autenticado, tentando endpoint público');
+        // Se falhar, tentamos o endpoint público como fallback
+        const publicUrl = `${baseUrl}/public/banners/active`;
+        data = await fetchBannerFromEndpoint(publicUrl);
+        console.log('[API Banner] Banner obtido com sucesso do endpoint público');
+      }
+    } else {
+      // Sem token, usamos diretamente o endpoint público
+      const publicUrl = `${baseUrl}/public/banners/active`;
+      console.log(`[API Banner] Sem token, usando endpoint público: ${publicUrl}`);
+      data = await fetchBannerFromEndpoint(publicUrl);
+      console.log('[API Banner] Banner obtido com sucesso do endpoint público');
+    }
+    
     console.log(`[API Banner] Dados obtidos: ${JSON.stringify(data)}`);
     
     // Retornar resposta JSON
