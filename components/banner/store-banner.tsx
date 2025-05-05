@@ -3,144 +3,151 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { tokenStore } from '@/lib/token-store';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface StoreBannerProps {
 	className?: string;
+	forceRefresh?: boolean;
 }
 
-export function StoreBanner({ className = '' }: StoreBannerProps) {
+export function StoreBanner({
+	className = '',
+	forceRefresh,
+}: StoreBannerProps) {
 	const [bannerUrl, setBannerUrl] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<boolean>(false);
-	const [tokenState, setTokenState] = useState<string | null>(null);
+	const [lastFetchTime, setLastFetchTime] = useState<number>(0);
+	const pathname = usePathname();
+	const router = useRouter();
 
-	// Função para buscar o banner separada para poder ser chamada várias vezes
-	const fetchBanner = async () => {
+	useEffect(() => {
 		let mounted = true;
 
-		try {
-			setIsLoading(true);
-			setError(false);
+		const fetchBanner = async () => {
+			if (!mounted) return;
 
-			// Verificar se há um token disponível
-			const token = tokenStore.getToken();
-			setTokenState(token); // Guardar estado do token para comparações
-			console.log(`[StoreBanner] Token disponível: ${!!token}`);
-
-			// Mesmo sem token, vamos tentar buscar o banner
-			// A API deve lidar com requisições não autenticadas
-			console.log('[StoreBanner] Iniciando busca do banner...');
-
-			// Configurar headers com ou sem token de autenticação
-			const headers: HeadersInit = {
-				Accept: 'application/json',
-			};
-
-			if (token) {
-				headers['Authorization'] = `Bearer ${token}`;
-			}
-
-			// Fazer requisição REST para obter o banner
-			console.log(
-				'[StoreBanner] Enviando requisição para /api/marketing/campaign/banner'
-			);
-			const response = await fetch('/api/marketing/campaign/banner', {
-				method: 'GET',
-				headers,
-				cache: 'no-store', // Evita cache para sempre obter o banner mais recente
-			});
-
-			console.log(`[StoreBanner] Status da resposta: ${response.status}`);
-
-			if (!response.ok) {
-				console.error(`[StoreBanner] Erro HTTP: ${response.status}`);
-				throw new Error(`Erro ${response.status} ao buscar banner`);
-			}
-
-			// Obter dados JSON da resposta com tratamento de erro apropriado
-			const contentType = response.headers.get('content-type');
-			if (!contentType || !contentType.includes('application/json')) {
-				console.error('[StoreBanner] Resposta não é JSON:', contentType);
-				throw new Error('Resposta não é do tipo JSON');
-			}
-
-			const data = await response.json();
-			console.log('[StoreBanner] Dados recebidos:', data);
-
-			// Verificar se a resposta contém uma URL de banner válida
-			if (data && data.imageUrl) {
+			// Verificar se já buscamos recentemente (menos de 5 segundos atrás)
+			const now = Date.now();
+			const timeSinceLastFetch = now - lastFetchTime;
+			if (lastFetchTime > 0 && timeSinceLastFetch < 5000 && bannerUrl) {
 				console.log(
-					`[StoreBanner] Banner obtido com sucesso: ${data.imageUrl}`
+					`[StoreBanner] Banner carregado recentemente (${timeSinceLastFetch}ms atrás), mantendo existente`
 				);
-				if (mounted) {
-					setBannerUrl(data.imageUrl);
-					setError(false);
+				return;
+			}
+
+			try {
+				setIsLoading(true);
+				setError(false);
+
+				// Verificar se há um token disponível
+				const token = tokenStore.getToken();
+				console.log(
+					`[StoreBanner] Token disponível: ${!!token}, buscando banner atualizado...`
+				);
+
+				// Adicionar parâmetro de timestamp para evitar cache
+				const timestamp = Date.now();
+
+				// Configurar headers com ou sem token de autenticação
+				const headers: HeadersInit = {
+					Accept: 'application/json',
+				};
+
+				if (token) {
+					headers['Authorization'] = `Bearer ${token}`;
 				}
-			} else {
-				console.warn(
-					'[StoreBanner] Resposta não contém URL de banner válida:',
-					data
+
+				// Fazer requisição REST para obter o banner
+				console.log(
+					'[StoreBanner] Enviando requisição para /api/marketing/campaign/banner'
 				);
+				const response = await fetch(
+					`/api/marketing/campaign/banner?_t=${timestamp}`,
+					{
+						method: 'GET',
+						headers,
+						cache: 'no-store', // Evita cache para sempre obter o banner mais recente
+					}
+				);
+
+				console.log(`[StoreBanner] Status da resposta: ${response.status}`);
+
+				if (!response.ok) {
+					console.error(`[StoreBanner] Erro HTTP: ${response.status}`);
+					throw new Error(`Erro ${response.status} ao buscar banner`);
+				}
+
+				// Obter dados JSON da resposta com tratamento de erro apropriado
+				const contentType = response.headers.get('content-type');
+				if (!contentType || !contentType.includes('application/json')) {
+					console.error('[StoreBanner] Resposta não é JSON:', contentType);
+					throw new Error('Resposta não é do tipo JSON');
+				}
+
+				const data = await response.json();
+
+				// Verificar se a resposta contém uma URL de banner válida
+				if (data && data.imageUrl) {
+					console.log(
+						`[StoreBanner] Banner obtido com sucesso: ${data.imageUrl}`
+					);
+					if (mounted) {
+						setBannerUrl(data.imageUrl);
+						setError(false);
+						setLastFetchTime(now);
+					}
+				} else {
+					console.warn(
+						'[StoreBanner] Resposta não contém URL de banner válida:',
+						data
+					);
+					if (mounted) {
+						setError(true);
+					}
+				}
+			} catch (error) {
+				console.error('[StoreBanner] Erro ao buscar banner:', error);
 				if (mounted) {
 					setError(true);
 				}
+			} finally {
+				if (mounted) {
+					setIsLoading(false);
+				}
 			}
-		} catch (error) {
-			console.error('[StoreBanner] Erro ao buscar banner:', error);
-			if (mounted) {
-				setError(true);
-			}
-		} finally {
-			if (mounted) {
-				setIsLoading(false);
-			}
-		}
-	};
+		};
 
-	// Efeito para buscar o banner na primeira renderização
-	useEffect(() => {
+		// Iniciar o processo de busca do banner
 		fetchBanner();
 
-		// Listener para eventos de autenticação
-		const handleAuthEvent = () => {
+		// Registrar ouvinte para eventos de autenticação
+		const handleAuthChange = () => {
 			console.log(
 				'[StoreBanner] Evento de autenticação detectado, recarregando banner'
 			);
 			fetchBanner();
 		};
 
-		// Registrar listener para eventos de autenticação
-		window.addEventListener('auth:ready', handleAuthEvent);
-		window.addEventListener('auth:signIn', handleAuthEvent);
-		window.addEventListener('auth:signOut', handleAuthEvent);
+		// Adicionar listener para evento de autenticação concluída
+		window.addEventListener('auth:ready', handleAuthChange);
+		window.addEventListener('auth:login', handleAuthChange);
+		window.addEventListener('auth:logout', handleAuthChange);
 
+		// Cleanup function
 		return () => {
-			// Limpar listeners
-			window.removeEventListener('auth:ready', handleAuthEvent);
-			window.removeEventListener('auth:signIn', handleAuthEvent);
-			window.removeEventListener('auth:signOut', handleAuthEvent);
+			mounted = false;
+			window.removeEventListener('auth:ready', handleAuthChange);
+			window.removeEventListener('auth:login', handleAuthChange);
+			window.removeEventListener('auth:logout', handleAuthChange);
 		};
-	}, []);
+	}, [forceRefresh, bannerUrl, lastFetchTime]);
 
-	// Efeito para observar mudanças no token
-	useEffect(() => {
-		const checkToken = () => {
-			const currentToken = tokenStore.getToken();
-
-			// Se o token mudou desde a última verificação, recarregar o banner
-			if (currentToken !== tokenState) {
-				console.log('[StoreBanner] Token mudou, recarregando banner');
-				fetchBanner();
-			}
-		};
-
-		// Verificar token a cada 2 segundos
-		const intervalId = setInterval(checkToken, 2000);
-
-		return () => {
-			clearInterval(intervalId);
-		};
-	}, [tokenState]);
+	// Gerar uma URL única para evitar cache da imagem
+	const imageUrl = bannerUrl
+		? `${bannerUrl}${bannerUrl.includes('?') ? '&' : '?'}_t=${lastFetchTime}`
+		: '/placeholder-banner-true.png';
 
 	return (
 		<div className={`w-full overflow-hidden rounded-lg ${className}`}>
@@ -160,7 +167,7 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 			) : (
 				// Banner real obtido da API
 				<Image
-					src={bannerUrl}
+					src={imageUrl}
 					alt="Banner promocional True Source"
 					width={1200}
 					height={400}

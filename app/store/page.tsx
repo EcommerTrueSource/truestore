@@ -539,7 +539,7 @@ export default function StorePage() {
 				);
 				setWarehouseName('MKT-Creator');
 				localStorage.setItem('warehouse_name', 'MKT-Creator');
-				
+
 				// Atualizar contagens de categorias para o warehouse padrão
 				updateCategoryCounts('MKT-Creator');
 			}
@@ -561,7 +561,7 @@ export default function StorePage() {
 			// Em caso de erro, usar Creator como padrão
 			setWarehouseName('MKT-Creator');
 			localStorage.setItem('warehouse_name', 'MKT-Creator');
-			
+
 			// Atualizar contagens de categorias mesmo em caso de erro
 			updateCategoryCounts('MKT-Creator');
 		}
@@ -592,25 +592,34 @@ export default function StorePage() {
 			const search = searchQuery || '';
 			const category = categoryId || '';
 			const sort = sortOrder || 'featured';
-			
+
 			// Verificar se há categoryIds nos parâmetros de URL (para categorias agrupadas)
 			const categoryIdsParam = searchParams.get('categoryIds');
 			let categoryIds: string[] | undefined;
-			
+
 			if (categoryIdsParam) {
 				try {
 					const parsedIds = JSON.parse(categoryIdsParam);
 					if (Array.isArray(parsedIds) && parsedIds.length > 0) {
 						categoryIds = parsedIds;
-						console.log(`[Store] Usando IDs de categorias agrupadas: ${categoryIds.join(', ')}`);
+						console.log(
+							`[Store] Usando IDs de categorias agrupadas: ${categoryIds.join(
+								', '
+							)}`
+						);
 					}
 				} catch (e) {
-					console.error('[Store] Erro ao processar categoryIds dos parâmetros URL:', e);
+					console.error(
+						'[Store] Erro ao processar categoryIds dos parâmetros URL:',
+						e
+					);
 				}
 			}
 
 			console.log(
-				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}${categoryIds ? ' (agrupada)' : ''}, busca: "${search}", ordenação: "${sort}"${
+				`[Store] Carregando produtos: página ${currentPage}, categoria: ${category}${
+					categoryIds ? ' (agrupada)' : ''
+				}, busca: "${search}", ordenação: "${sort}"${
 					append ? ' (anexando resultados)' : ''
 				}`
 			);
@@ -633,16 +642,20 @@ export default function StorePage() {
 					skipCache: skipCache, // Ignorar cache apenas quando necessário
 					...extraParams, // Adicionar parâmetros extras
 				};
-				
+
 				// Adicionar categoryIds se disponível
 				if (categoryIds && categoryIds.length > 0) {
 					apiParams.categoryIds = JSON.stringify(categoryIds);
 				}
-				
+
 				// Usar a nova função searchWarehouseProducts para busca específica em warehouse
 				response = await searchWarehouseProducts(apiParams);
-				
-				console.log(`[Store] Resposta da API recebida com sucesso. Produtos totais: ${response?.data?.length || 0}`);
+
+				console.log(
+					`[Store] Resposta da API recebida com sucesso. Produtos totais: ${
+						response?.data?.length || 0
+					}`
+				);
 			} catch (apiError) {
 				console.error('[Store] Erro ao buscar produtos:', apiError);
 
@@ -686,14 +699,14 @@ export default function StorePage() {
 				// Preservar informações de estoque do warehouse se disponíveis
 				warehouseStock: item.warehouseStock || undefined,
 				// Adicionar flag para indicar se o produto está em estoque
-				inStock: item.warehouseStock ? 
-					(item.warehouseStock.available > 0) : 
-					(item.stock > 0)
+				inStock: item.warehouseStock
+					? item.warehouseStock.available > 0
+					: item.stock > 0,
 			}));
 
 			// A filtragem de categoria é feita no backend, não precisamos filtrar novamente
 			let filteredProducts = productsData;
-			
+
 			// Apenas para depuração, calcular quantos produtos correspondem à categoria selecionada
 			if (category && category !== 'all') {
 				const categoryMatchCount = productsData.filter((product: Product) => {
@@ -709,12 +722,24 @@ export default function StorePage() {
 
 					return false;
 				}).length;
-				
-				console.log(`[Store] Correspondência de categoria (apenas log): ${categoryMatchCount} de ${productsData.length} produtos correspondem à categoria ${category}`);
-				
+
+				console.log(
+					`[Store] Correspondência de categoria (apenas log): ${categoryMatchCount} de ${productsData.length} produtos correspondem à categoria ${category}`
+				);
+
 				// Verificar informações de estoque para depuração
-				const withStock = productsData.filter((product: Product) => product.inStock).length;
-				console.log(`[Store] Produtos com estoque disponível: ${withStock} de ${productsData.length} (${withStock > 0 ? Math.round(withStock/productsData.length*100) : 0}%)`);
+				const withStock = productsData.filter(
+					(product: Product) => product.inStock
+				).length;
+				console.log(
+					`[Store] Produtos com estoque disponível: ${withStock} de ${
+						productsData.length
+					} (${
+						withStock > 0
+							? Math.round((withStock / productsData.length) * 100)
+							: 0
+					}%)`
+				);
 			}
 
 			// Ordenar os produtos sempre no lado do cliente
@@ -901,12 +926,16 @@ export default function StorePage() {
 		if (hasToken) {
 			// Evitar carregar quando já temos produtos e não houve mudança nos parâmetros relevantes
 			const shouldReload = searchQuery || categoryId || loadAttempts === 0;
-			
+
 			if (shouldReload) {
-				console.log('[StorePage] Parâmetros de consulta alterados, recarregando produtos...');
+				console.log(
+					'[StorePage] Parâmetros de consulta alterados, recarregando produtos...'
+				);
 				loadProducts(1, false);
 			} else {
-				console.log('[StorePage] Parâmetros não mudaram, evitando recarga desnecessária');
+				console.log(
+					'[StorePage] Parâmetros não mudaram, evitando recarga desnecessária'
+				);
 			}
 		} else if (loadAttempts < maxLoadAttempts) {
 			// Se não temos token e ainda não tentamos muitas vezes, aguardar e tentar novamente
@@ -949,7 +978,9 @@ export default function StorePage() {
 	// Efeito para atualizar contagens de categorias quando a página está pronta ou o depósito muda
 	useEffect(() => {
 		if (warehouseName && pageReady) {
-			console.log(`[StorePage] Atualizando contagens de categorias para o warehouse: ${warehouseName}`);
+			console.log(
+				`[StorePage] Atualizando contagens de categorias para o warehouse: ${warehouseName}`
+			);
 			// Usar o método do contexto para atualizar as contagens com o warehouse atual
 			updateCategoryCounts(warehouseName);
 		}
@@ -967,10 +998,12 @@ export default function StorePage() {
 		// Se não temos produtos ou a página não está pronta, não fazer nada
 		if (products.length === 0 || !pageReady) return;
 
-		console.log(`[StorePage] Parâmetro de ordenação alterado para: ${sortOrder}, reordenando produtos...`);
-		
+		console.log(
+			`[StorePage] Parâmetro de ordenação alterado para: ${sortOrder}, reordenando produtos...`
+		);
+
 		// Atualizar os produtos com a nova ordenação
-		setProducts(prevProducts => {
+		setProducts((prevProducts) => {
 			const newProducts = [...prevProducts].sort((a, b) => {
 				switch (sortOrder) {
 					case 'price-asc':
@@ -1015,7 +1048,10 @@ export default function StorePage() {
 						animate={{ y: 0, opacity: 1 }}
 						transition={{ duration: 0.5 }}
 					>
-						<StoreBanner className="mb-2" />
+						<StoreBanner
+							className="mb-2"
+							forceRefresh={pageReady && isAuthenticated}
+						/>
 					</motion.div>
 
 					{/* Search and filter area */}
