@@ -2,7 +2,7 @@
 
 import type React from 'react';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,10 +13,85 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { CreditCard, Truck, MapPin } from 'lucide-react';
+import { CepAutocomplete } from '@/components/checkout/cep-autocomplete';
+
+interface AddressData {
+	street: string;
+	neighborhood: string;
+	city: string;
+	state: string;
+}
 
 export default function CheckoutForm() {
 	const router = useRouter();
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [address, setAddress] = useState<AddressData>({
+		street: '',
+		neighborhood: '',
+		city: '',
+		state: '',
+	});
+	const [userEditedFields, setUserEditedFields] = useState<{
+		street: boolean;
+		neighborhood: boolean;
+	}>({
+		street: false,
+		neighborhood: false,
+	});
+	const [cep, setCep] = useState('');
+	const [cepError, setCepError] = useState('');
+	const [isPartialAddress, setIsPartialAddress] = useState(false);
+	const lastProcessedCep = useRef('');
+	const addressDataLocked = useRef(false);
+
+	const handleCepChange = (value: string) => {
+		if (value !== lastProcessedCep.current) {
+			addressDataLocked.current = false;
+		}
+		setCep(value);
+	};
+
+	const handleAddressFound = (data: {
+		street: string;
+		neighborhood: string;
+		city: string;
+		state: string;
+		isPartialAddress: boolean;
+	}) => {
+		if (addressDataLocked.current) {
+			return;
+		}
+
+		lastProcessedCep.current = cep;
+		addressDataLocked.current = true;
+
+		setIsPartialAddress(data.isPartialAddress);
+
+		setAddress((prevAddress) => ({
+			street:
+				data.isPartialAddress && userEditedFields.street
+					? prevAddress.street
+					: data.street || '',
+			neighborhood:
+				data.isPartialAddress && userEditedFields.neighborhood
+					? prevAddress.neighborhood
+					: data.neighborhood || '',
+			city: data.city || '',
+			state: data.state || '',
+		}));
+	};
+
+	const handleStreetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const value = e.target.value;
+		setAddress((prev) => ({ ...prev, street: value }));
+		setUserEditedFields((prev) => ({ ...prev, street: true }));
+	};
+
+	const handleNeighborhoodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const value = e.target.value;
+		setAddress((prev) => ({ ...prev, neighborhood: value }));
+		setUserEditedFields((prev) => ({ ...prev, neighborhood: true }));
+	};
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -61,16 +136,43 @@ export default function CheckoutForm() {
 
 							<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 								<div className="space-y-2">
-									<Label htmlFor="cep">CEP</Label>
-									<Input id="cep" placeholder="00000-000" required />
+									<CepAutocomplete
+										value={cep}
+										onChange={handleCepChange}
+										onAddressFound={handleAddressFound}
+										error={cepError}
+										setError={setCepError}
+										required
+									/>
 								</div>
 								<div className="space-y-2 md:col-span-2">
 									<Label htmlFor="address">Endereço</Label>
 									<Input
 										id="address"
 										placeholder="Rua, Avenida, etc."
+										value={address.street}
+										onChange={handleStreetChange}
 										required
+										disabled={
+											!isPartialAddress &&
+											address.street !== '' &&
+											!userEditedFields.street
+										}
+										className={
+											isPartialAddress
+												? 'border-amber-300 focus-visible:ring-amber-300'
+												: ''
+										}
 									/>
+									{!isPartialAddress && address.street !== '' ? (
+										<p className="text-xs text-gray-500 mt-1">
+											Endereço preenchido automaticamente pelo CEP
+										</p>
+									) : isPartialAddress ? (
+										<p className="text-xs text-amber-600 mt-1">
+											Por favor, preencha o endereço manualmente
+										</p>
+									) : null}
 								</div>
 							</div>
 
@@ -87,17 +189,65 @@ export default function CheckoutForm() {
 
 							<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 								<div className="space-y-2">
+									<Label htmlFor="neighborhood">Bairro</Label>
+									<Input
+										id="neighborhood"
+										placeholder="Seu bairro"
+										value={address.neighborhood}
+										onChange={handleNeighborhoodChange}
+										required
+										disabled={
+											!isPartialAddress &&
+											address.neighborhood !== '' &&
+											!userEditedFields.neighborhood
+										}
+										className={
+											isPartialAddress
+												? 'border-amber-300 focus-visible:ring-amber-300'
+												: ''
+										}
+									/>
+									{!isPartialAddress && address.neighborhood !== '' ? (
+										<p className="text-xs text-gray-500 mt-1">
+											Bairro preenchido automaticamente pelo CEP
+										</p>
+									) : isPartialAddress ? (
+										<p className="text-xs text-amber-600 mt-1">
+											Por favor, preencha o bairro manualmente
+										</p>
+									) : null}
+								</div>
+								<div className="space-y-2">
 									<Label htmlFor="city">Cidade</Label>
-									<Input id="city" placeholder="Sua cidade" required />
+									<Input
+										id="city"
+										placeholder="Sua cidade"
+										value={address.city}
+										onChange={(e) =>
+											setAddress({ ...address, city: e.target.value })
+										}
+										required
+										disabled={address.city !== ''}
+									/>
 								</div>
 								<div className="space-y-2">
 									<Label htmlFor="state">Estado</Label>
-									<Input id="state" placeholder="UF" required />
+									<Input
+										id="state"
+										placeholder="UF"
+										value={address.state}
+										onChange={(e) =>
+											setAddress({ ...address, state: e.target.value })
+										}
+										required
+										disabled={address.state !== ''}
+									/>
 								</div>
-								<div className="space-y-2">
-									<Label htmlFor="phone">Telefone</Label>
-									<Input id="phone" placeholder="(00) 00000-0000" required />
-								</div>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="phone">Telefone</Label>
+								<Input id="phone" placeholder="(00) 00000-0000" required />
 							</div>
 						</CardContent>
 					</Card>

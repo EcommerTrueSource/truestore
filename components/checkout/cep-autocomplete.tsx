@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, MapPin, AlertCircle, CheckCircle } from 'lucide-react';
+import { Loader2, MapPin, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { useCep } from '@/hooks/use-cep';
 
 interface CepAutocompleteProps {
@@ -14,6 +14,7 @@ interface CepAutocompleteProps {
 		neighborhood: string;
 		city: string;
 		state: string;
+		isPartialAddress: boolean;
 	}) => void;
 	error?: string;
 	setError?: (error: string) => void;
@@ -31,6 +32,9 @@ export function CepAutocomplete({
 	const { isLoading, error: cepError, fetchAddress, resetError } = useCep();
 	const [debouncedValue, setDebouncedValue] = useState(value);
 	const [wasSuccessful, setWasSuccessful] = useState(false);
+	const [isPartialAddress, setIsPartialAddress] = useState(false);
+	const [validatedCep, setValidatedCep] = useState('');
+	const isProcessing = useRef(false);
 
 	// Formatar o CEP para exibição
 	const formatDisplayCEP = (value: string) => {
@@ -52,10 +56,14 @@ export function CepAutocomplete({
 		const formattedValue = formatDisplayCEP(rawValue);
 		onChange(formattedValue);
 
-		// Reinicia o status de sucesso quando o usuário digita
-		if (wasSuccessful) {
+		// Reinicia o status de sucesso quando o usuário alterar o CEP
+		if (wasSuccessful && formattedValue !== validatedCep) {
 			setWasSuccessful(false);
+			setValidatedCep('');
 		}
+
+		// Reinicia o flag de endereço parcial
+		setIsPartialAddress(false);
 
 		// Limpa erros
 		if (error && setError) {
@@ -66,6 +74,11 @@ export function CepAutocomplete({
 
 	// Debounce para não fazer muitas requisições
 	useEffect(() => {
+		// Se o CEP já foi validado e não mudou, não faça nada
+		if (wasSuccessful && value === validatedCep) {
+			return;
+		}
+
 		const timer = setTimeout(() => {
 			setDebouncedValue(value);
 		}, 800);
@@ -73,29 +86,54 @@ export function CepAutocomplete({
 		return () => {
 			clearTimeout(timer);
 		};
-	}, [value]);
+	}, [value, wasSuccessful, validatedCep]);
 
 	// Busca endereço quando o valor debounced mudar e tiver 8 dígitos numéricos
 	useEffect(() => {
 		const numericCep = debouncedValue.replace(/\D/g, '');
 
-		if (numericCep.length === 8) {
-			(async () => {
+		// Se o CEP já foi validado, não consulte novamente
+		if (debouncedValue === validatedCep) {
+			return;
+		}
+
+		// Se já está processando ou não tem 8 dígitos, não continua
+		if (isProcessing.current || numericCep.length !== 8) {
+			return;
+		}
+
+		const fetchAddressData = async () => {
+			isProcessing.current = true;
+
+			try {
 				const addressData = await fetchAddress(numericCep);
 
 				if (addressData) {
+					// Verifica se é um CEP geral (sem rua ou bairro)
+					const isPartial = !addressData.logradouro || !addressData.bairro;
+					setIsPartialAddress(isPartial);
+
 					onAddressFound({
 						street: addressData.logradouro,
 						neighborhood: addressData.bairro,
 						city: addressData.localidade,
 						state: addressData.uf,
+						isPartialAddress: isPartial,
 					});
 
+					// Registra que este CEP foi validado com sucesso
+					setValidatedCep(debouncedValue);
 					setWasSuccessful(true);
 				}
-			})();
+			} finally {
+				isProcessing.current = false;
+			}
+		};
+
+		if (numericCep.length === 8) {
+			fetchAddressData();
 		}
-	}, [debouncedValue, fetchAddress, onAddressFound]);
+	}, [debouncedValue, fetchAddress, onAddressFound, validatedCep]);
 
 	// Propaga erros para o componente pai, se houver
 	useEffect(() => {
@@ -143,9 +181,17 @@ export function CepAutocomplete({
 
 				{error && <p className="text-red-500 text-xs mt-1">{error}</p>}
 
-				{wasSuccessful && !error && (
+				{wasSuccessful && !error && !isPartialAddress && (
 					<p className="text-green-600 text-xs mt-1">
 						Endereço encontrado com sucesso
+					</p>
+				)}
+
+				{isPartialAddress && wasSuccessful && !error && (
+					<p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+						<Info size={12} />
+						CEP geral identificado. Por favor, preencha rua e bairro
+						manualmente.
 					</p>
 				)}
 			</div>
