@@ -31,7 +31,7 @@ interface Product {
 }
 
 interface OrderItem {
-	id: number;
+	id: number | string;
 	productId?: string;
 	name: string;
 	price: number;
@@ -74,39 +74,78 @@ export default function ConfirmationPage() {
 	const [orderTime, setOrderTime] = useState('');
 	const [copySuccess, setCopySuccess] = useState(false);
 	const [processedItems, setProcessedItems] = useState<OrderItem[]>([]);
+	const [debugInfo, setDebugInfo] = useState('');
 
 	useEffect(() => {
-		// Simulação de carregamento de dados com tempo reduzido
-		setTimeout(() => {
+		const loadOrderData = () => {
 			try {
+				// Recuperar dados do pedido do sessionStorage
 				const storedOrder = sessionStorage.getItem('orderData');
-				if (storedOrder) {
-					const parsedOrder = JSON.parse(storedOrder);
-					console.log('Dados do pedido carregados:', parsedOrder);
-					setOrderData(parsedOrder);
+				if (!storedOrder) {
+					console.error(
+						'[Confirmation] Nenhum dado de pedido encontrado em sessionStorage'
+					);
+					setDebugInfo('Nenhum dado encontrado em sessionStorage');
+					setIsLoading(false);
+					return;
+				}
 
-					// Usar o ID real do pedido se disponível, ou gerar um aleatório como fallback
-					if (parsedOrder.id) {
-						setOrderNumber(parsedOrder.id);
+				// Verificar se o pedido é válido como JSON antes de processá-lo
+				try {
+					const rawData = JSON.parse(storedOrder);
+					console.log('[Confirmation] Dados brutos do pedido:', rawData);
+					console.log(
+						'[Confirmation] ID do pedido em dados brutos:',
+						rawData.id
+					);
+					console.log('[Confirmation] Items do pedido:', rawData.__items__);
+
+					if (rawData.__items__ && rawData.__items__.length > 0) {
+						const firstItem = rawData.__items__[0];
+						console.log('[Confirmation] Primeiro item do pedido:', firstItem);
+						if (firstItem.__product__) {
+							console.log(
+								'[Confirmation] Produto do primeiro item:',
+								firstItem.__product__
+							);
+							console.log(
+								'[Confirmation] Imagens do produto:',
+								firstItem.__product__.images
+							);
+						}
+					}
+
+					setDebugInfo(
+						`Dados carregados: ID=${rawData.id || 'não encontrado'}`
+					);
+
+					// Armazenar dados brutos para processamento
+					setOrderData(rawData);
+
+					// Configurar o número do pedido
+					if (rawData.id) {
+						console.log('[Confirmation] ID do pedido encontrado:', rawData.id);
+						setOrderNumber(rawData.id);
 					} else {
-						// Fallback para o caso de não haver ID
+						console.warn(
+							'[Confirmation] ID do pedido não encontrado, gerando ID temporário'
+						);
+						// Fallback com número aleatório
 						const randomOrderNumber = `P${Math.floor(
 							100000 + Math.random() * 900000
 						)}`;
 						setOrderNumber(randomOrderNumber);
-						console.warn(
-							'ID do pedido não encontrado, usando número gerado aleatoriamente'
-						);
 					}
 
-					// Processar e normalizar os itens para exibição
-					const items = processOrderItems(parsedOrder);
+					// Processar itens do pedido
+					const items = processOrderItems(rawData);
+					console.log('[Confirmation] Itens processados:', items);
 					setProcessedItems(items);
 
 					// Formatar data e hora usando createdAt da API ou timestamp do sessionStorage
-					const orderDateTime = parsedOrder.createdAt
-						? new Date(parsedOrder.createdAt)
-						: new Date(parsedOrder.timestamp);
+					const orderDateTime = rawData.createdAt
+						? new Date(rawData.createdAt)
+						: new Date(rawData.timestamp);
 
 					setOrderDate(
 						new Intl.DateTimeFormat('pt-BR', {
@@ -122,38 +161,80 @@ export default function ConfirmationPage() {
 							minute: '2-digit',
 						}).format(orderDateTime)
 					);
+				} catch (parseError: any) {
+					console.error(
+						'[Confirmation] Erro ao analisar dados JSON:',
+						parseError
+					);
+					setDebugInfo(
+						`Erro ao analisar JSON: ${
+							parseError.message || 'Erro desconhecido'
+						}`
+					);
 				}
-			} catch (error) {
-				console.error('Erro ao carregar dados do pedido:', error);
+			} catch (error: any) {
+				console.error(
+					'[Confirmation] Erro ao carregar dados do pedido:',
+					error
+				);
+				setDebugInfo(`Erro geral: ${error.message || 'Erro desconhecido'}`);
 			} finally {
 				setIsLoading(false);
 			}
-		}, 300);
+		};
+
+		// Pequeno delay para garantir que o sessionStorage esteja disponível
+		setTimeout(loadOrderData, 100);
 	}, []);
 
 	// Função para processar e normalizar itens do pedido
 	const processOrderItems = (order: OrderData): OrderItem[] => {
-		// Verificar se temos o formato da API (__items__) ou formato padrão (items)
+		// Log para depuração
+		console.log(
+			'[processOrderItems] Estrutura de order.__items__:',
+			order.__items__
+		);
+
+		// Verificar __items__ da API
 		if (order.__items__ && order.__items__.length > 0) {
 			// Formato da API
-			return order.__items__.map((item) => ({
-				id:
-					typeof item.id === 'number'
-						? item.id
-						: parseInt(item.id as any, 10) || Math.random(),
-				name: item.__product__?.name || item.name || 'Produto',
-				price: parseFloat(item.price as any) || 0,
-				quantity: item.quantity || 1,
-				// Obter imagem do produto se disponível
-				image:
-					item.__product__?.images && item.__product__.images.length > 0
-						? item.__product__.images[0]
-						: undefined,
-			}));
+			return order.__items__.map((item) => {
+				// Log de debugging para cada item
+				console.log('[processOrderItems] Item sendo processado:', item);
+				console.log('[processOrderItems] Produto do item:', item.__product__);
+
+				// Verificar se tem imagens
+				if (item.__product__?.images) {
+					console.log(
+						'[processOrderItems] Imagens encontradas:',
+						item.__product__.images
+					);
+				}
+
+				return {
+					id: item.id || Math.random().toString(),
+					name: item.__product__?.name || item.name || 'Produto',
+					price:
+						typeof item.price === 'string'
+							? parseFloat(item.price)
+							: item.price || 0,
+					quantity: item.quantity || 1,
+					// Obter imagem do produto se disponível
+					image:
+						item.__product__?.images && item.__product__.images.length > 0
+							? item.__product__.images[0]
+							: undefined,
+				};
+			});
 		}
 
-		// Formato padrão já existente
-		return order.items || [];
+		// Verificar formato alternativo com items diretamente
+		if (order.items && order.items.length > 0) {
+			return order.items;
+		}
+
+		// Retornar array vazio se não houver itens
+		return [];
 	};
 
 	const calculateTotal = () => {
@@ -222,6 +303,11 @@ export default function ConfirmationPage() {
 						<p className="mt-2 text-gray-500">
 							Não conseguimos encontrar informações sobre o seu pedido.
 						</p>
+						{debugInfo && (
+							<div className="mt-2 p-2 bg-gray-100 rounded text-xs text-left max-w-lg mx-auto overflow-auto">
+								<p className="font-mono">Debug: {debugInfo}</p>
+							</div>
+						)}
 						<Button
 							onClick={() => router.push('/store')}
 							className="mt-6 bg-brand-magenta hover:bg-brand-magenta/90"
@@ -277,49 +363,64 @@ export default function ConfirmationPage() {
 								<CardContent className="p-4">
 									<div className="space-y-4">
 										<div className="space-y-3">
-											{processedItems.map((item) => (
-												<div key={item.id} className="flex items-start gap-3">
-													<div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded overflow-hidden">
-														{item.image ? (
-															<img
-																src={item.image}
-																alt={item.name}
-																className="h-full w-full object-cover"
-																onError={(e) => {
-																	// Fallback se a imagem falhar
-																	(e.target as HTMLImageElement).style.display =
-																		'none';
-																	(
-																		e.target as HTMLImageElement
-																	).parentElement!.innerHTML = `
-																		<div class="h-full w-full flex items-center justify-center">
-																			<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400">
-																				<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-																			</svg>
-																		</div>
-																	`;
-																}}
-															/>
-														) : (
-															<div className="h-full w-full flex items-center justify-center">
-																<Package size={20} className="text-gray-400" />
-															</div>
-														)}
+											{processedItems.length > 0 ? (
+												processedItems.map((item, index) => (
+													<div
+														key={item.id || index}
+														className="flex items-start gap-3"
+													>
+														<div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded overflow-hidden">
+															{item.image ? (
+																<img
+																	src={item.image}
+																	alt={item.name}
+																	className="h-full w-full object-cover"
+																	onError={(e) => {
+																		console.error(
+																			`[Confirmation] Erro ao carregar imagem: ${item.image}`
+																		);
+																		(
+																			e.target as HTMLImageElement
+																		).style.display = 'none';
+																		(
+																			e.target as HTMLImageElement
+																		).parentElement!.innerHTML = `
+																			<div class="h-full w-full flex items-center justify-center">
+																				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400">
+																					<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+																				</svg>
+																			</div>
+																		`;
+																	}}
+																/>
+															) : (
+																<div className="h-full w-full flex items-center justify-center">
+																	<Package
+																		size={20}
+																		className="text-gray-400"
+																	/>
+																</div>
+															)}
+														</div>
+														<div className="flex-1 min-w-0">
+															<p className="text-sm font-medium text-gray-900 truncate">
+																{item.name}
+															</p>
+															<p className="text-xs text-gray-500">
+																Qtd: {item.quantity} ×{' '}
+																{formatCurrency(item.price)}
+															</p>
+														</div>
+														<div className="text-sm font-medium text-brand-magenta">
+															{formatCurrency(item.price * item.quantity)}
+														</div>
 													</div>
-													<div className="flex-1 min-w-0">
-														<p className="text-sm font-medium text-gray-900 truncate">
-															{item.name}
-														</p>
-														<p className="text-xs text-gray-500">
-															Qtd: {item.quantity} ×{' '}
-															{formatCurrency(item.price)}
-														</p>
-													</div>
-													<div className="text-sm font-medium text-brand-magenta">
-														{formatCurrency(item.price * item.quantity)}
-													</div>
+												))
+											) : (
+												<div className="text-sm text-gray-500 text-center py-4">
+													Nenhum item encontrado no pedido
 												</div>
-											))}
+											)}
 										</div>
 
 										<div className="pt-3 border-t border-gray-100">
@@ -368,26 +469,28 @@ export default function ConfirmationPage() {
 											</p>
 											<p className="text-sm text-gray-600">{orderData.phone}</p>
 										</div>
-										{orderData.delivery.street !== 'Não informado' && (
-											<div>
-												<p className="text-sm font-medium text-gray-700">
-													Endereço
-												</p>
-												<p className="text-sm text-gray-600">
-													{orderData.delivery.street},{' '}
-													{orderData.delivery.number}
-													{orderData.delivery.complement &&
-														` - ${orderData.delivery.complement}`}
-												</p>
-												<p className="text-sm text-gray-600">
-													{orderData.delivery.neighborhood},{' '}
-													{orderData.delivery.city} - {orderData.delivery.state}
-												</p>
-												<p className="text-sm text-gray-600">
-													{orderData.delivery.zipCode}
-												</p>
-											</div>
-										)}
+										{orderData.delivery.street &&
+											orderData.delivery.street !== 'Não informado' && (
+												<div>
+													<p className="text-sm font-medium text-gray-700">
+														Endereço
+													</p>
+													<p className="text-sm text-gray-600">
+														{orderData.delivery.street},{' '}
+														{orderData.delivery.number}
+														{orderData.delivery.complement &&
+															` - ${orderData.delivery.complement}`}
+													</p>
+													<p className="text-sm text-gray-600">
+														{orderData.delivery.neighborhood},{' '}
+														{orderData.delivery.city} -{' '}
+														{orderData.delivery.state}
+													</p>
+													<p className="text-sm text-gray-600">
+														{orderData.delivery.zipCode}
+													</p>
+												</div>
+											)}
 									</div>
 								</CardContent>
 							</Card>

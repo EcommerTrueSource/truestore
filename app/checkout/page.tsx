@@ -399,7 +399,10 @@ export default function CheckoutPage() {
 				'orderData',
 				JSON.stringify({
 					...orderData,
-					orderId: responseData.id || 'ID não disponível',
+					id: responseData.id,
+					createdAt: responseData.createdAt,
+					status: responseData.status,
+					__items__: responseData.__items__,
 				})
 			);
 
