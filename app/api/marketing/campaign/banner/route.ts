@@ -10,10 +10,16 @@ import { TrueCore } from '@/lib/true-core-proxy';
 export async function GET(request: NextRequest) {
   console.log('[API Banner] Iniciando requisição');
   
-  // Obter a URL base da API True Core
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
-    "https://painel-true-core-app-460815276546.us-central1.run.app/api";
-  console.log(`[API Banner] URL da API: ${baseUrl}`);
+  // Obter a URL base da API True Core sem o /api final
+  const baseUrlRaw = process.env.NEXT_PUBLIC_API_URL || 
+    "https://painel-true-core-app-460815276546.us-central1.run.app";
+  
+  // Remover /api do final se estiver presente para evitar duplicação
+  const baseUrl = baseUrlRaw.endsWith('/api') 
+    ? baseUrlRaw.slice(0, -4) 
+    : baseUrlRaw;
+    
+  console.log(`[API Banner] URL da API base: ${baseUrl}`);
   
   try {
     // Obter o token de autenticação
@@ -35,7 +41,7 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // URL completa do endpoint - usando o endpoint correto que requer autenticação
+    // URL completa do endpoint - usando o endpoint correto
     const apiUrl = `${baseUrl}/marketing/campaign/banner`;
     console.log(`[API Banner] Fazendo requisição para: ${apiUrl}`);
     
@@ -71,10 +77,11 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error(`[API Banner] Erro: ${error?.message || 'Desconhecido'}`);
     
-    // Verificar se o erro é devido à indisponibilidade do backend
-    // Neste caso, retornamos um banner padrão em vez de um erro
-    if (error?.message?.includes('fetch') || error?.message?.includes('network')) {
-      console.log('[API Banner] Erro de conexão com o backend, retornando banner padrão');
+    // Verificar se o erro é devido à indisponibilidade do backend ou erro 404
+    if (error?.message?.includes('fetch') || 
+        error?.message?.includes('network') || 
+        error?.message?.includes('404')) {
+      console.log('[API Banner] Erro na conexão com o backend ou recurso não encontrado, retornando banner padrão');
       return NextResponse.json(
         { imageUrl: '/placeholder-banner-true.png' },
         { 

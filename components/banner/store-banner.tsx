@@ -23,22 +23,26 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 				setIsLoading(true);
 				setError(false);
 				
-				console.log('[StoreBanner] Iniciando busca do banner...');
-				
 				// Verificar se há um token disponível
 				const token = tokenStore.getToken();
 				console.log(`[StoreBanner] Token disponível: ${!!token}`);
 				
-				// Configurar headers com ou sem token de autenticação
-				const headers: HeadersInit = {
-					'Accept': 'application/json',
-				};
-				
-				if (token) {
-					headers['Authorization'] = `Bearer ${token}`;
+				if (!token) {
+					console.warn('[StoreBanner] Sem token disponível. Usando placeholder.');
+					setError(true);
+					return;
 				}
 				
+				console.log('[StoreBanner] Iniciando busca do banner...');
+				
+				// Configurar headers com token de autenticação
+				const headers: HeadersInit = {
+					'Accept': 'application/json',
+					'Authorization': `Bearer ${token}`
+				};
+				
 				// Fazer requisição REST para obter o banner
+				console.log('[StoreBanner] Enviando requisição para /api/marketing/campaign/banner');
 				const response = await fetch('/api/marketing/campaign/banner', {
 					method: 'GET',
 					headers,
@@ -70,7 +74,7 @@ export function StoreBanner({ className = '' }: StoreBannerProps) {
 						setError(false);
 					}
 				} else {
-					console.warn('[StoreBanner] Resposta não contém URL de banner válida');
+					console.warn('[StoreBanner] Resposta não contém URL de banner válida:', data);
 					if (mounted) {
 						setError(true);
 					}
