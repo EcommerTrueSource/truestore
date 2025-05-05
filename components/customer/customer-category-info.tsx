@@ -156,9 +156,9 @@ export default function CustomerCategoryInfo() {
 
 						<div className="mt-2 text-xs text-brand-blue/70 flex flex-col gap-1">
 							<div className="flex items-center gap-1">
-							<Calendar className="h-3 w-3 text-brand-blue/70" />
-							Renovação a cada{' '}
-							{frequencyPerMonth === 1 ? 'mês' : `${frequencyPerMonth} meses`}
+								<Calendar className="h-3 w-3 text-brand-blue/70" />
+								Renovação a cada{' '}
+								{frequencyPerMonth === 1 ? 'mês' : `${frequencyPerMonth} meses`}
 							</div>
 							{nextRenewalDate && (
 								<div className="flex items-center gap-1">
@@ -170,26 +170,14 @@ export default function CustomerCategoryInfo() {
 					</div>
 
 					{/* Detalhes do plano em grid layout */}
-					<div className="grid grid-cols-2 gap-3">
-						<div className="flex flex-col items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow">
+					<div className="flex justify-center">
+						<div className="flex flex-col items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow w-full max-w-xs">
 							<Banknote className="h-5 w-5 text-brand-magenta mb-2" />
 							<div className="text-sm font-medium text-brand-magenta/70 mb-1 text-center">
 								Valor do Voucher
 							</div>
 							<div className="font-semibold text-brand-blue/90 text-center">
 								{formatter.format(parseFloat(ticketValue))}
-							</div>
-						</div>
-
-						<div className="flex flex-col items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow">
-							<CreditCard className="h-5 w-5 text-brand-magenta mb-2" />
-							<div className="text-sm font-medium text-brand-magenta/70 mb-1 text-center">
-								Limite de uso
-							</div>
-							<div className="font-semibold text-brand-blue/90 text-center">
-								{customer.creditLimit
-									? formatter.format(customer.creditLimit)
-									: 'Sem limite definido'}
 							</div>
 						</div>
 					</div>
