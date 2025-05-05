@@ -10,16 +10,50 @@ interface StoreBannerProps {
 	forceRefresh?: boolean;
 }
 
+// Chave para armazenar o banner no localStorage
+const BANNER_STORAGE_KEY = 'true_source_banner_url';
+const BANNER_TIMESTAMP_KEY = 'true_source_banner_timestamp';
+
 export function StoreBanner({
 	className = '',
 	forceRefresh,
 }: StoreBannerProps) {
-	const [bannerUrl, setBannerUrl] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
+	// Inicializar com valor do localStorage, se disponível
+	const getInitialBannerUrl = () => {
+		if (typeof window === 'undefined') return null;
+		return localStorage.getItem(BANNER_STORAGE_KEY);
+	};
+
+	const getInitialTimestamp = () => {
+		if (typeof window === 'undefined') return 0;
+		const stored = localStorage.getItem(BANNER_TIMESTAMP_KEY);
+		return stored ? parseInt(stored, 10) : 0;
+	};
+
+	const [bannerUrl, setBannerUrl] = useState<string | null>(
+		getInitialBannerUrl()
+	);
+	const [isLoading, setIsLoading] = useState(!bannerUrl); // Não mostrar loading se já temos banner
 	const [error, setError] = useState<boolean>(false);
-	const [lastFetchTime, setLastFetchTime] = useState<number>(0);
+	const [lastFetchTime, setLastFetchTime] = useState<number>(
+		getInitialTimestamp()
+	);
+	// Mantemos o pathname disponível para uso, mas não como dependência do useEffect
 	const pathname = usePathname();
-	const router = useRouter();
+
+	// Atualizar localStorage quando bannerUrl mudar
+	useEffect(() => {
+		if (bannerUrl) {
+			localStorage.setItem(BANNER_STORAGE_KEY, bannerUrl);
+		}
+	}, [bannerUrl]);
+
+	// Atualizar localStorage quando lastFetchTime mudar
+	useEffect(() => {
+		if (lastFetchTime > 0) {
+			localStorage.setItem(BANNER_TIMESTAMP_KEY, lastFetchTime.toString());
+		}
+	}, [lastFetchTime]);
 
 	useEffect(() => {
 		let mounted = true;
@@ -27,18 +61,30 @@ export function StoreBanner({
 		const fetchBanner = async () => {
 			if (!mounted) return;
 
-			// Verificar se já buscamos recentemente (menos de 5 segundos atrás)
+			// Verificar se já buscamos recentemente (menos de 30 segundos atrás)
 			const now = Date.now();
 			const timeSinceLastFetch = now - lastFetchTime;
-			if (lastFetchTime > 0 && timeSinceLastFetch < 5000 && bannerUrl) {
+			const CACHE_DURATION = 30 * 1000; // 30 segundos
+
+			if (
+				lastFetchTime > 0 &&
+				timeSinceLastFetch < CACHE_DURATION &&
+				bannerUrl
+			) {
 				console.log(
-					`[StoreBanner] Banner carregado recentemente (${timeSinceLastFetch}ms atrás), mantendo existente`
+					`[StoreBanner] Banner carregado recentemente (${Math.round(
+						timeSinceLastFetch / 1000
+					)}s atrás), mantendo existente`
 				);
+				setIsLoading(false); // Garantir que não mostre loading
 				return;
 			}
 
 			try {
-				setIsLoading(true);
+				// Se já temos um banner anterior, não mostrar o skeleton de loading
+				if (!bannerUrl) {
+					setIsLoading(true);
+				}
 				setError(false);
 
 				// Verificar se há um token disponível
