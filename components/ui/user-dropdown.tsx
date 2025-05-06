@@ -36,11 +36,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 // Componente de Animação do Logout que permanece visível e cobre toda a tela
-function LogoutAnimation({
-	phase,
-}: {
-	phase: number;
-}) {
+function LogoutAnimation({ phase }: { phase: number }) {
 	// useEffect para atualizar a mensagem em vez de acionar o redirecionamento
 	useEffect(() => {
 		// Não acionar mais o redirecionamento, pois já é feito no handleConfirmLogout
@@ -161,7 +157,7 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 
 					// Redirecionar para página de login imediatamente após a conclusão do logout
 					router.push('/login');
-					
+
 					// Fallback caso o router falhe
 					setTimeout(() => {
 						if (window.location.pathname !== '/login') {
@@ -200,7 +196,7 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 			if (window.location.pathname !== '/login') {
 				// Redirecionar para a página de login
 				router.push('/login');
-				
+
 				// Fallback caso o router falhe
 				setTimeout(() => {
 					if (window.location.pathname !== '/login') {
@@ -307,18 +303,12 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 					</DropdownMenuGroup>
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
-						{/* <DropdownMenuItem asChild>
-							<Link href="/settings" className="cursor-pointer">
-								<Settings className="mr-2 h-4 w-4" />
-								Configurações
-							</Link>
-						</DropdownMenuItem> */}
-						{/* <DropdownMenuItem asChild>
-							<Link href="/ajuda" className="cursor-pointer">
+						<DropdownMenuItem asChild>
+							<Link href="/help" className="cursor-pointer">
 								<HelpCircle className="mr-2 h-4 w-4" />
 								Ajuda e Suporte
 							</Link>
-						</DropdownMenuItem> */}
+						</DropdownMenuItem>
 					</DropdownMenuGroup>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem
@@ -359,9 +349,7 @@ export default function UserDropdown({ className }: UserDropdownProps) {
 			</AlertDialog>
 
 			{/* Tela de animação de logout */}
-			{isLoggingOut && (
-				<LogoutAnimation phase={phase} />
-			)}
+			{isLoggingOut && <LogoutAnimation phase={phase} />}
 		</>
 	);
 }
