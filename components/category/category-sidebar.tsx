@@ -348,14 +348,28 @@ export function CategorySidebar() {
 	};
 
 	// Ordenar categorias por nome (exceto "Todos os produtos" que fica sempre no topo)
-	const sortedCategories = [...displayedCategories].sort((a, b) => {
-		// "Todos os produtos" sempre primeiro
-		if (a.id === 'all') return -1;
-		if (b.id === 'all') return 1;
+	// E filtrar categorias com 0 produtos
+	const sortedCategories = [...displayedCategories]
+		.filter((category) => {
+			// Nunca filtrar a categoria "Todos os produtos"
+			if (category.id === 'all') return true;
 
-		// As demais categorias em ordem alfabética
-		return a.name.localeCompare(b.name, 'pt-BR');
-	});
+			// Verificar a contagem de produtos
+			const productCount = category.isGrouped
+				? category.totalItems || 0
+				: category.itemQuantity || 0;
+
+			// Manter apenas categorias com produtos
+			return productCount > 0;
+		})
+		.sort((a, b) => {
+			// "Todos os produtos" sempre primeiro
+			if (a.id === 'all') return -1;
+			if (b.id === 'all') return 1;
+
+			// As demais categorias em ordem alfabética
+			return a.name.localeCompare(b.name, 'pt-BR');
+		});
 
 	// Componente de skeleton para categorias
 	const CategorySkeleton = () => (
