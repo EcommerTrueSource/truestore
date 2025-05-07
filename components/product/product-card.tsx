@@ -240,7 +240,9 @@ export function ProductCard({
 			>
 				<div
 					className={`relative overflow-hidden bg-gray-100 ${
-						isListView ? 'h-32 w-32 flex-shrink-0' : 'h-52'
+						isListView
+							? 'h-28 sm:h-32 w-28 sm:w-32 flex-shrink-0'
+							: 'aspect-square sm:aspect-[4/3] md:aspect-[4/3] lg:aspect-[4/3]'
 					}`}
 				>
 					<div
@@ -254,17 +256,19 @@ export function ProductCard({
 						src={product.imageUrl || '/placeholder.svg?height=300&width=300'}
 						alt={product.name}
 						fill
-						className={`object-cover transition-all duration-700 ${
+						className={`object-contain object-center sm:object-cover transition-all duration-700 ${
 							isHovered ? 'scale-110' : 'scale-100'
 						} ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
 						onLoad={() => setIsImageLoaded(true)}
-						sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+						sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+						priority={false}
+						loading="lazy"
 					/>
 
 					{/* Quick action buttons - only show if hideFavoriteShare is false */}
 					{!hideFavoriteShare && (
 						<div
-							className={`absolute top-3 right-3 flex flex-col gap-2 transition-all duration-300 ${
+							className={`absolute top-2 sm:top-3 right-2 sm:right-3 flex flex-col gap-2 transition-all duration-300 ${
 								isHovered
 									? 'opacity-100 translate-x-0'
 									: 'opacity-0 translate-x-2'
@@ -272,7 +276,7 @@ export function ProductCard({
 						>
 							<button
 								onClick={handleLike}
-								className={`h-8 w-8 rounded-full backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 ${
+								className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 ${
 									isProductFavorite
 										? 'bg-brand-magenta text-white'
 										: 'bg-white/80 text-gray-600 hover:bg-white'
@@ -292,7 +296,7 @@ export function ProductCard({
 							{!isListView && (
 								<button
 									onClick={handleShare}
-									className="h-8 w-8 rounded-full backdrop-blur-md bg-white/80 text-gray-600 flex items-center justify-center hover:bg-white hover:scale-110 transition-all"
+									className="h-7 w-7 sm:h-8 sm:w-8 rounded-full backdrop-blur-md bg-white/80 text-gray-600 flex items-center justify-center hover:bg-white hover:scale-110 transition-all"
 									aria-label="Compartilhar produto"
 								>
 									<Share2 size={16} />
@@ -303,22 +307,26 @@ export function ProductCard({
 
 					{/* Category badge */}
 					<div
-						className={`absolute bottom-3 left-3 transition-all duration-300 ${
+						className={`absolute bottom-2 sm:bottom-3 left-2 sm:left-3 transition-all duration-300 ${
 							isHovered
 								? 'translate-y-0 opacity-100'
 								: 'translate-y-2 opacity-0'
 						}`}
 					>
 						<Button
-							variant="ghost"
+							variant="secondary"
 							size="sm"
 							onClick={() => {
 								const params = new URLSearchParams(searchParams.toString());
 								params.set('category', productCategory.id);
-								console.log(`[ProductCard] Categoria clicada no badge: ${getCategoryName()} (ID: ${productCategory.id})`);
+								console.log(
+									`[ProductCard] Categoria clicada no badge: ${getCategoryName()} (ID: ${
+										productCategory.id
+									})`
+								);
 								router.push(`/store?${params.toString()}`);
 							}}
-							className="h-7 text-xs gap-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+							className="h-6 sm:h-7 text-xs gap-1 px-2 bg-brand-magenta text-white border-none shadow-sm hover:bg-brand-magenta/90 transition-all duration-200"
 						>
 							{getCategoryName()}
 						</Button>
@@ -326,15 +334,17 @@ export function ProductCard({
 
 					{/* Cart count badge */}
 					{itemInCart > 0 && !isHovered && (
-						<div className="absolute top-3 left-3">
-							<Badge className="badge-brand">{itemInCart} no carrinho</Badge>
+						<div className="absolute top-2 sm:top-3 left-2 sm:left-3">
+							<Badge className="badge-brand text-xs">
+								{itemInCart} no carrinho
+							</Badge>
 						</div>
 					)}
 
 					{/* Botão de remover do carrinho quando hovering */}
 					{itemInCart > 0 && (
 						<div
-							className={`absolute top-3 left-3 transition-all duration-300 ${
+							className={`absolute top-2 sm:top-3 left-2 sm:left-3 transition-all duration-300 ${
 								isHovered ? 'translate-y-0 opacity-100' : 'opacity-0'
 							}`}
 						>
@@ -350,14 +360,19 @@ export function ProductCard({
 					)}
 				</div>
 
-				<div className={`p-4 ${isListView ? 'flex-1 flex flex-col' : ''}`}>
+				<div
+					className={`p-3 sm:p-4 ${isListView ? 'flex-1 flex flex-col' : ''}`}
+				>
 					<div
 						className={`${
 							isListView ? 'flex justify-between items-start' : ''
 						}`}
 					>
 						<div className={`${isListView ? 'flex-1' : ''}`}>
-							<h3 className="font-medium text-gray-900 text-lg mb-1 truncate text-brand-hover transition-colors">
+							<h3
+								className="font-medium text-gray-900 text-base sm:text-lg mb-1 truncate text-brand-hover transition-colors"
+								title={product.name}
+							>
 								{product.name}
 							</h3>
 
@@ -376,7 +391,11 @@ export function ProductCard({
 											e.stopPropagation();
 											const params = new URLSearchParams();
 											params.set('category', productCategory.id);
-											console.log(`[ProductCard] Categoria clicada no rodapé: ${getCategoryName()} (ID: ${productCategory.id})`);
+											console.log(
+												`[ProductCard] Categoria clicada no rodapé: ${getCategoryName()} (ID: ${
+													productCategory.id
+												})`
+											);
 											router.push(`/store?${params.toString()}`);
 										}}
 									>
@@ -390,7 +409,7 @@ export function ProductCard({
 
 						{isListView && (
 							<div className="text-right">
-								<div className="text-brand font-bold text-lg">
+								<div className="text-brand font-bold text-base sm:text-lg">
 									{formatCurrency(product.price)}
 								</div>
 							</div>
@@ -399,7 +418,7 @@ export function ProductCard({
 
 					{!isListView && (
 						<div className="mb-3">
-							<div className="text-brand font-bold text-lg">
+							<div className="text-brand font-bold text-base sm:text-lg">
 								{formatCurrency(product.price)}
 							</div>
 						</div>
@@ -419,7 +438,7 @@ export function ProductCard({
 						) : itemInCart === 0 ? (
 							<Button
 								onClick={handleAddToCart}
-								className="w-full bg-brand text-white hover:opacity-90"
+								className="w-full bg-brand text-white hover:opacity-90 h-9 sm:h-10 text-sm sm:text-base"
 								disabled={isAddingToCart}
 							>
 								{isAddingToCart ? (
@@ -438,7 +457,7 @@ export function ProductCard({
 							<div className="flex items-center justify-between gap-2 border rounded-md overflow-hidden">
 								<button
 									onClick={handleDecreaseQuantity}
-									className="bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center h-10 w-10 transition-colors"
+									className="bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center h-9 sm:h-10 w-9 sm:w-10 transition-colors"
 									aria-label="Diminuir quantidade"
 								>
 									<Minus size={14} />
@@ -446,7 +465,7 @@ export function ProductCard({
 								<span className="font-medium text-gray-800">{itemInCart}</span>
 								<button
 									onClick={handleIncreaseQuantity}
-									className="bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center h-10 w-10 transition-colors"
+									className="bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center h-9 sm:h-10 w-9 sm:w-10 transition-colors"
 									aria-label="Aumentar quantidade"
 								>
 									<Plus size={14} />
