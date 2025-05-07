@@ -454,7 +454,7 @@ export function CategorySidebar() {
 									<button
 										onClick={() => handleCategoryClick(category)}
 										className={cn(
-											'w-full text-left px-3 py-2.5 rounded-lg transition-all flex items-start gap-3 group min-h-[48px]',
+											'w-full text-left px-3 py-2.5 rounded-lg transition-all flex items-center gap-3 group min-h-[48px]',
 											isSelected
 												? 'bg-gradient-to-r from-brand-light to-brand-light/40 text-brand-solid font-medium shadow-sm'
 												: 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -462,7 +462,7 @@ export function CategorySidebar() {
 									>
 										<div
 											className={cn(
-												'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 mt-0.5',
+												'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300',
 												isSelected
 													? 'bg-gradient-to-br from-brand-magenta to-brand-orange text-white shadow-sm'
 													: 'bg-gray-50 text-gray-400 group-hover:text-brand-magenta group-hover:bg-gray-100'
@@ -470,7 +470,7 @@ export function CategorySidebar() {
 										>
 											{getCategoryIcon(displayName)}
 										</div>
-										<div className="flex-1 flex flex-col min-w-0">
+										<div className="flex-1 flex flex-col min-w-0 justify-center">
 											<span
 												className={cn(
 													'transition-all leading-tight line-clamp-2 text-sm',
@@ -485,7 +485,7 @@ export function CategorySidebar() {
 											<Badge
 												variant="outline"
 												className={cn(
-													'flex-shrink-0 text-xs self-start mt-1',
+													'flex-shrink-0 text-xs',
 													isSelected
 														? 'bg-brand-light border-brand'
 														: 'bg-gray-50 border-gray-200 text-gray-500'
