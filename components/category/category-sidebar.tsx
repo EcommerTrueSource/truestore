@@ -57,6 +57,8 @@ export function CategorySidebar() {
 		GroupedCategory[]
 	>([]);
 	const initialLoadComplete = useRef(false);
+	const [showSkeletons, setShowSkeletons] = useState(true);
+	const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 	const currentCategory = searchParams.get('category');
 
@@ -256,18 +258,37 @@ export function CategorySidebar() {
 		return groupCategories(categories);
 	}, [categories]);
 
-	// Atualizar categorias exibidas apenas quando houver mudanças significativas
+	// Gerenciar o estado de carregamento e skeletons
 	useEffect(() => {
-		// Se não temos categorias ainda e está carregando, manter estado atual
-		if (categories.length === 0 && isLoading && !initialLoadComplete.current) {
-			return;
+		// Sempre mostrar skeleton inicialmente em um carregamento
+		if (isLoading) {
+			setShowSkeletons(true);
+
+			// Limpar qualquer timeout anterior
+			if (loadTimeoutRef.current) {
+				clearTimeout(loadTimeoutRef.current);
+			}
+		}
+		// Quando temos categorias e não estamos carregando
+		else if (categories.length > 0) {
+			// Definir um pequeno delay antes de esconder os skeletons para evitar flash
+			loadTimeoutRef.current = setTimeout(() => {
+				setShowSkeletons(false);
+				setDisplayedCategories(groupedCategories);
+				initialLoadComplete.current = true;
+			}, 300);
+		}
+		// Se não temos categorias, não estamos carregando, e há erro
+		else if (!isLoading && error) {
+			setShowSkeletons(false);
 		}
 
-		// Se recebemos novas categorias e não há erro
-		if (categories.length > 0 && !error) {
-			setDisplayedCategories(groupedCategories);
-			initialLoadComplete.current = true;
-		}
+		// Limpeza do timeout quando o componente for desmontado
+		return () => {
+			if (loadTimeoutRef.current) {
+				clearTimeout(loadTimeoutRef.current);
+			}
+		};
 	}, [categories, isLoading, error, groupedCategories]);
 
 	// Log para debug e carregar categorias se necessário - com verificação para evitar loops
@@ -336,24 +357,57 @@ export function CategorySidebar() {
 		return a.name.localeCompare(b.name, 'pt-BR');
 	});
 
-	// Renderizar skeletons somente no carregamento inicial
-	if (isLoading && !initialLoadComplete.current) {
-		return (
-			<div className="p-4 space-y-4">
-				<Skeleton className="h-6 w-3/4" />
-				<div className="space-y-2">
-					{Array.from({ length: 12 }).map((_, i) => (
-						<Skeleton key={i} className="h-10 w-full" />
-					))}
-				</div>
+	// Componente de skeleton para categorias
+	const CategorySkeleton = () => (
+		<div className="space-y-3">
+			{/* Primeira categoria (Todos os produtos) */}
+			<div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50/50">
+				<Skeleton className="h-8 w-8 rounded-full" />
+				<Skeleton className="h-5 w-32" />
 			</div>
+
+			{/* Demais categorias */}
+			{Array.from({ length: 10 }).map((_, i) => (
+				<div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+					<Skeleton className="h-8 w-8 rounded-full" />
+					<Skeleton className="h-5 w-36" />
+					<Skeleton className="h-5 w-8 ml-auto" />
+				</div>
+			))}
+		</div>
+	);
+
+	// Se estamos carregando, mostrar skeletons
+	if (showSkeletons) {
+		return (
+			<aside className="h-full bg-white p-6 overflow-hidden flex flex-col">
+				<div className="flex items-center gap-2 mb-4">
+					<div className="h-9 w-9 rounded-full icon-brand-container flex items-center justify-center">
+						<ShoppingBag size={18} className="icon-brand" />
+					</div>
+					<h2 className="text-lg font-bold text-brand">Categorias</h2>
+					<div className="ml-auto">
+						<motion.div
+							initial={{ opacity: 0, scale: 0.8 }}
+							animate={{ opacity: 1, scale: 1 }}
+							className="w-5 h-5 rounded-full relative"
+						>
+							<RefreshCw size={16} className="text-brand animate-spin" />
+						</motion.div>
+					</div>
+				</div>
+
+				<ScrollArea className="flex-1 pr-4">
+					<CategorySkeleton />
+				</ScrollArea>
+			</aside>
 		);
 	}
 
-	// Se houver erro, exibir mensagem para o usuário com opção de recarregar
+	// Se houver erro e não temos categorias, exibir mensagem de erro
 	if (error && displayedCategories.length === 0) {
 		return (
-			<div className="p-4 space-y-4">
+			<aside className="h-full bg-white p-6 overflow-hidden flex flex-col">
 				<div className="flex items-center gap-2 mb-4">
 					<div className="h-9 w-9 rounded-full icon-brand-container flex items-center justify-center">
 						<ShoppingBag size={18} className="icon-brand" />
@@ -371,21 +425,24 @@ export function CategorySidebar() {
 					<Button
 						variant="secondary"
 						size="sm"
-						onClick={() => reload()}
+						onClick={() => {
+							setShowSkeletons(true);
+							reload();
+						}}
 						className="w-full mt-1 flex items-center justify-center gap-2"
 					>
 						<RefreshCw size={14} />
 						Tentar novamente
 					</Button>
 				</div>
-			</div>
+			</aside>
 		);
 	}
 
 	// Se não houver categorias e não estiver carregando, exibir mensagem
 	if (displayedCategories.length === 0 && !isLoading) {
 		return (
-			<div className="p-4 space-y-4">
+			<aside className="h-full bg-white p-6 overflow-hidden flex flex-col">
 				<div className="flex items-center gap-2 mb-4">
 					<div className="h-9 w-9 rounded-full icon-brand-container flex items-center justify-center">
 						<ShoppingBag size={18} className="icon-brand" />
@@ -397,14 +454,17 @@ export function CategorySidebar() {
 					<Button
 						variant="secondary"
 						size="sm"
-						onClick={() => reload()}
+						onClick={() => {
+							setShowSkeletons(true);
+							reload();
+						}}
 						className="w-full mt-1 flex items-center justify-center gap-2"
 					>
 						<RefreshCw size={14} />
 						Tentar novamente
 					</Button>
 				</div>
-			</div>
+			</aside>
 		);
 	}
 
@@ -417,7 +477,7 @@ export function CategorySidebar() {
 				<h2 className="text-lg font-bold text-brand">Categorias</h2>
 
 				{/* Indicador de carregamento sutil para atualizações */}
-				{isLoading && initialLoadComplete.current && (
+				{isLoading && (
 					<div className="ml-auto">
 						<motion.div
 							initial={{ opacity: 0, scale: 0.8 }}
