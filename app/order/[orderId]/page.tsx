@@ -209,11 +209,21 @@ export default function OrderDetailsPage() {
 								</p>
 							</div>
 						</div>
-						<Badge
-							className={`${statusConfig.color} py-1.5 px-3 text-sm font-medium shadow-sm`}
-						>
-							{statusConfig.label}
-						</Badge>
+						<div className="flex flex-col md:flex-row gap-2 items-start md:items-center">
+							<Badge
+								className={`${statusConfig.color} py-1.5 px-3 text-sm font-medium shadow-sm`}
+							>
+								{statusConfig.label}
+							</Badge>
+							{order.source === 'manual' && (
+								<Badge
+									variant="outline"
+									className="bg-gray-50 text-gray-600 border-gray-200 text-xs py-1 px-2 shadow-sm"
+								>
+									Pedido Padrão (gerado pelo sistema)
+								</Badge>
+							)}
+						</div>
 					</div>
 				</motion.div>
 
