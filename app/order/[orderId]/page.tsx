@@ -216,10 +216,7 @@ export default function OrderDetailsPage() {
 								{statusConfig.label}
 							</Badge>
 							{order.source === 'manual' && (
-								<Badge
-									variant="outline"
-									className="bg-gray-50 text-gray-600 border-gray-200 text-xs py-1 px-2 shadow-sm"
-								>
+								<Badge className="bg-gradient-to-r from-brand-magenta/15 to-brand-orange/15 text-gray-700 border-brand-magenta/20 text-xs font-medium py-1 px-2 shadow-sm">
 									Pedido Padrão (gerado pelo sistema)
 								</Badge>
 							)}
