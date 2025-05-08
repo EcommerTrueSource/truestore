@@ -1126,13 +1126,7 @@ export default function CheckoutPage() {
 												<div className="flex justify-between font-medium text-base mt-3">
 													<span>Total</span>
 													<span className="text-brand-magenta">
-														{formatCurrency(
-															Math.max(
-																0,
-																totalPrice -
-																	Math.min(getAvailableBalance(), totalPrice)
-															)
-														)}
+														{formatCurrency(totalPrice)}
 													</span>
 												</div>
 

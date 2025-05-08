@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
         operation: operation,
         total: checkoutData.payment.subtotal,
         shippingCost: 0,
-        discount: checkoutData.payment.voucherUsed,
+        discount: 0,
         status: "PENDING",
         notes: checkoutData.observations || "",
         items: formattedItems,
