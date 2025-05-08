@@ -27,6 +27,7 @@ import {
 	FileText,
 	ChevronDown,
 	ChevronUp,
+	Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -216,7 +217,11 @@ export default function OrderDetailsPage() {
 								{statusConfig.label}
 							</Badge>
 							{order.source === 'manual' && (
-								<Badge className="bg-gradient-to-r from-brand-magenta/15 to-brand-orange/15 text-gray-700 border-brand-magenta/20 text-xs font-medium py-1 px-2 shadow-sm">
+								<Badge
+									variant="outline"
+									className="bg-gradient-to-r from-brand-magenta/10 to-brand-orange/10 text-gray-700 border-brand-magenta/20 text-xs py-1.5 px-3 shadow-sm flex items-center gap-1.5 whitespace-nowrap"
+								>
+									<Settings size={14} className="text-brand-magenta" />
 									Pedido Padrão (gerado pelo sistema)
 								</Badge>
 							)}

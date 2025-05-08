@@ -18,6 +18,7 @@ import {
 	CheckCircle,
 	XCircle,
 	FileText,
+	Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -261,8 +262,17 @@ export default function PurchaseHistoryPage() {
 																{statusConfig.label}
 															</Badge>
 															{order.source === 'manual' && (
-																<Badge className="bg-gradient-to-r from-brand-magenta/15 to-brand-orange/15 text-gray-700 border-brand-magenta/20 text-xs font-medium">
-																	Pedido Padrão (gerado pelo sistema)
+																<Badge
+																	variant="outline"
+																	className="bg-gradient-to-r from-brand-magenta/10 to-brand-orange/10 text-gray-700 border-brand-magenta/20 text-xs py-1 px-2 shadow-sm flex items-center gap-1 whitespace-nowrap max-w-[calc(100vw-3rem)] truncate md:max-w-none"
+																>
+																	<Settings
+																		size={12}
+																		className="text-brand-magenta shrink-0"
+																	/>
+																	<span className="truncate">
+																		Pedido Padrão (gerado pelo sistema)
+																	</span>
 																</Badge>
 															)}
 														</div>
