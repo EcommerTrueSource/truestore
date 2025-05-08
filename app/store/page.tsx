@@ -269,10 +269,40 @@ export default function StorePage() {
 	const maxLoadAttempts = 3;
 	const observerRef = useRef<IntersectionObserver | null>(null);
 	const scrollPositionRef = useRef<number>(0);
+	// Timestamp para recarregar o banner quando o usuário volta para a página
+	const [bannerRefreshKey, setBannerRefreshKey] = useState<number>(Date.now());
 
 	const categoryId = searchParams.get('category');
 	const searchQuery = searchParams.get('search');
 	const sortOrder = searchParams.get('sort') || 'featured';
+
+	// Atualizar o bannerRefreshKey quando a página é montada ou quando o foco volta para ela
+	useEffect(() => {
+		// Atualizar o refreshKey quando a página monta
+		setBannerRefreshKey(Date.now());
+
+		// Configurar event listener para quando a guia recebe foco de volta
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible') {
+				console.log('[StorePage] Página recebeu foco, atualizando banner');
+				setBannerRefreshKey(Date.now());
+			}
+		};
+
+		// Configurar event listener para quando o usuário navega de volta
+		const handleNavigation = () => {
+			console.log('[StorePage] Navegação detectada, atualizando banner');
+			setBannerRefreshKey(Date.now());
+		};
+
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+		window.addEventListener('focus', handleNavigation);
+
+		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			window.removeEventListener('focus', handleNavigation);
+		};
+	}, []);
 
 	// Restaurar o estado da sessão anterior ao montar o componente
 	useEffect(() => {
@@ -1051,6 +1081,7 @@ export default function StorePage() {
 						<StoreBanner
 							className="mb-2"
 							forceRefresh={pageReady && isAuthenticated}
+							refreshKey={bannerRefreshKey}
 						/>
 					</motion.div>
 

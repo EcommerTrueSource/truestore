@@ -62,18 +62,36 @@ export async function GET(request: NextRequest) {
         data = await fetchBannerFromEndpoint(authenticatedUrl, token);
         console.log('[API Banner] Banner obtido com sucesso do endpoint autenticado');
       } catch (error) {
-        console.warn('[API Banner] Falha ao obter do endpoint autenticado, tentando endpoint público');
+        console.warn('[API Banner] Falha ao obter do endpoint autenticado, tentando endpoint público', error instanceof Error ? error.message : 'Erro desconhecido');
         // Se falhar, tentamos o endpoint público como fallback
-        const publicUrl = `${baseUrl}/public/banners/active`;
-        data = await fetchBannerFromEndpoint(publicUrl);
-        console.log('[API Banner] Banner obtido com sucesso do endpoint público');
+        try {
+          const publicUrl = `${baseUrl}/public/banners/active`;
+          data = await fetchBannerFromEndpoint(publicUrl);
+          console.log('[API Banner] Banner obtido com sucesso do endpoint público');
+        } catch (publicError) {
+          console.error('[API Banner] Falha também no endpoint público, usando banner padrão', publicError instanceof Error ? publicError.message : 'Erro desconhecido');
+          // Se ambos falharem, usamos o banner padrão
+          data = { imageUrl: '/placeholder-banner-true.png' };
+        }
       }
     } else {
       // Sem token, usamos diretamente o endpoint público
-      const publicUrl = `${baseUrl}/public/banners/active`;
-      console.log(`[API Banner] Sem token, usando endpoint público: ${publicUrl}`);
-      data = await fetchBannerFromEndpoint(publicUrl);
-      console.log('[API Banner] Banner obtido com sucesso do endpoint público');
+      try {
+        const publicUrl = `${baseUrl}/public/banners/active`;
+        console.log(`[API Banner] Sem token, usando endpoint público: ${publicUrl}`);
+        data = await fetchBannerFromEndpoint(publicUrl);
+        console.log('[API Banner] Banner obtido com sucesso do endpoint público');
+      } catch (publicError) {
+        console.error('[API Banner] Falha no endpoint público, usando banner padrão', publicError instanceof Error ? publicError.message : 'Erro desconhecido');
+        // Se falhar, usamos o banner padrão
+        data = { imageUrl: '/placeholder-banner-true.png' };
+      }
+    }
+    
+    // Se após todas as tentativas não tivermos dados válidos, usar um fallback
+    if (!data || !data.imageUrl) {
+      console.warn('[API Banner] Dados inválidos recebidos, usando banner padrão');
+      data = { imageUrl: '/placeholder-banner-true.png' };
     }
     
     console.log(`[API Banner] Dados obtidos: ${JSON.stringify(data)}`);
@@ -89,28 +107,11 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error(`[API Banner] Erro: ${error?.message || 'Desconhecido'}`);
     
-    // Verificar se o erro é devido à indisponibilidade do backend ou erro 404
-    if (error?.message?.includes('fetch') || 
-        error?.message?.includes('network') || 
-        error?.message?.includes('404')) {
-      console.log('[API Banner] Erro na conexão com o backend ou recurso não encontrado, retornando banner padrão');
-      return NextResponse.json(
-        { imageUrl: '/placeholder-banner-true.png' },
-        { 
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store, max-age=0'
-          }
-        }
-      );
-    }
-    
-    // Retornar erro como JSON para evitar HTML
+    // SEMPRE retornar um JSON válido, mesmo em caso de erro
     return NextResponse.json(
-      { error: 'Erro ao obter banner', message: error?.message || 'Erro desconhecido' }, 
+      { imageUrl: '/placeholder-banner-true.png', error: error?.message || 'Erro desconhecido' },
       { 
-        status: 500,
+        status: 200, // Retornar 200 com fallback em vez de erro
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store, max-age=0'

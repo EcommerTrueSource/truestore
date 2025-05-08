@@ -18,11 +18,22 @@ import {
 	Award,
 	Calendar,
 	Clock,
+	AlertCircle,
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function CustomerCategoryInfo() {
 	const { customer, isLoading, getAvailableBalance, orderLimits } =
 		useCustomer();
+	const [loadError, setLoadError] = useState<string | null>(null);
+
+	// Verificar se houve algum erro nos dados carregados
+	useEffect(() => {
+		// Este efeito rodará quando customer for carregado ou quando houver falha
+		if (!isLoading && !customer && !loadError) {
+			setLoadError('Não foi possível carregar os dados do cliente');
+		}
+	}, [customer, isLoading, loadError]);
 
 	if (isLoading) {
 		return (
@@ -36,6 +47,37 @@ export default function CustomerCategoryInfo() {
 						<Skeleton className="h-8 w-full" />
 						<Skeleton className="h-20 w-full" />
 						<Skeleton className="h-8 w-full" />
+					</div>
+				</CardContent>
+			</Card>
+		);
+	}
+
+	// Mostrar estado de erro quando ocorrer falha nos dados
+	if (loadError || (!customer && !isLoading)) {
+		return (
+			<Card className="w-full bg-white/70 backdrop-blur-md shadow-md">
+				<CardHeader>
+					<CardTitle className="text-gray-600 flex items-center gap-2">
+						<AlertCircle size={18} className="text-red-500" />
+						Informações indisponíveis
+					</CardTitle>
+					<CardDescription className="text-gray-500">
+						Não foi possível carregar seus dados neste momento
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<div className="flex flex-col items-center justify-center h-32 gap-3">
+						<p className="text-sm text-gray-500 text-center">
+							Tente novamente mais tarde ou entre em contato com o suporte
+						</p>
+						<button
+							onClick={() => window.location.reload()}
+							className="text-brand-magenta text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-magenta/30 bg-brand-magenta/5 hover:bg-brand-magenta/10 transition-colors"
+						>
+							<RefreshCcw size={14} />
+							Recarregar
+						</button>
 					</div>
 				</CardContent>
 			</Card>
@@ -68,12 +110,14 @@ export default function CustomerCategoryInfo() {
 	const availableBalance = getAvailableBalance();
 
 	// Extrair apenas a parte "Atleta" do nome da categoria para o badge
-	const simplifiedCategoryName = name.includes('Atleta')
+	const simplifiedCategoryName = name?.includes('Atleta')
 		? 'Atleta'
-		: name.replace(/Creator -|\[.*\]|\(\$.*\)/g, '').trim();
+		: name?.replace(/Creator -|\[.*\]|\(\$.*\)/g, '').trim() || 'Cliente';
 
 	// Extrair a parte principal da categoria (antes do hífen)
 	const extractMainCategory = (categoryName: string) => {
+		if (!categoryName) return 'Cliente';
+
 		// Caso especial para "Top Master" ou "Clinica Top Master"
 		if (categoryName.includes('Top Master')) {
 			return 'Top Master';
@@ -89,7 +133,7 @@ export default function CustomerCategoryInfo() {
 	};
 
 	// Obter a categoria principal
-	const mainCategory = extractMainCategory(name);
+	const mainCategory = extractMainCategory(name || '');
 
 	// Formatação de números
 	const formatter = new Intl.NumberFormat('pt-BR', {
@@ -100,11 +144,16 @@ export default function CustomerCategoryInfo() {
 	// Formatação de data para DD/MM/YYYY
 	const formatDate = (dateString: string) => {
 		if (!dateString) return '';
-		const date = new Date(dateString);
-		const day = String(date.getDate()).padStart(2, '0');
-		const month = String(date.getMonth() + 1).padStart(2, '0');
-		const year = date.getFullYear();
-		return `${day}/${month}/${year}`;
+		try {
+			const date = new Date(dateString);
+			const day = String(date.getDate()).padStart(2, '0');
+			const month = String(date.getMonth() + 1).padStart(2, '0');
+			const year = date.getFullYear();
+			return `${day}/${month}/${year}`;
+		} catch (error) {
+			console.error('Erro ao formatar data:', error);
+			return '';
+		}
 	};
 
 	// Obter a data da próxima renovação
@@ -151,14 +200,16 @@ export default function CustomerCategoryInfo() {
 						</div>
 
 						<div className="text-3xl font-bold bg-gradient-to-r from-brand-magenta to-brand-blue bg-clip-text text-transparent">
-							{formatter.format(availableBalance)}
+							{formatter.format(availableBalance || 0)}
 						</div>
 
 						<div className="mt-2 text-xs text-brand-blue/70 flex flex-col gap-1">
 							<div className="flex items-center gap-1">
 								<Calendar className="h-3 w-3 text-brand-blue/70" />
 								Renovação a cada{' '}
-								{frequencyPerMonth === 1 ? 'mês' : `${frequencyPerMonth} meses`}
+								{frequencyPerMonth === 1
+									? 'mês'
+									: `${frequencyPerMonth || '-'} meses`}
 							</div>
 							{nextRenewalDate && (
 								<div className="flex items-center gap-1">
@@ -177,7 +228,7 @@ export default function CustomerCategoryInfo() {
 								Valor do Voucher
 							</div>
 							<div className="font-semibold text-brand-blue/90 text-center">
-								{formatter.format(parseFloat(ticketValue))}
+								{formatter.format(parseFloat(ticketValue || '0'))}
 							</div>
 						</div>
 					</div>

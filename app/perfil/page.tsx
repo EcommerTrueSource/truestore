@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,7 @@ import {
 	Upload,
 	ShoppingCart,
 	Heart,
+	RefreshCcw,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -57,7 +58,11 @@ import {
 	DialogFooter,
 } from '@/components/ui/dialog';
 import StoreLayout from '@/components/layouts/store-layout';
-import CustomerCategoryInfo from '@/components/customer/customer-category-info';
+
+// Lazy loading do componente CustomerCategoryInfo para melhorar performance
+const LazyCustomerCategoryInfo = lazy(
+	() => import('@/components/customer/customer-category-info')
+);
 
 // Definindo interface para o perfil de usuário
 interface ProfileData {
@@ -150,13 +155,20 @@ export default function PerfilPage() {
 	const [isChangingPassword, setIsChangingPassword] = useState(false);
 	// Estado para controlar a renderização no cliente
 	const [isMounted, setIsMounted] = useState(false);
+	// Estado para controlar possíveis erros de carregamento
+	const [loadError, setLoadError] = useState<string | null>(null);
 
 	// Efeito para garantir que o componente só seja totalmente renderizado no cliente
 	useEffect(() => {
-		setIsMounted(true);
+		try {
+			setIsMounted(true);
+		} catch (error) {
+			console.error('Erro ao montar componente:', error);
+			setLoadError('Ocorreu um erro ao carregar o perfil');
+		}
 	}, []);
 
-	// Formatação da data
+	// Formatação da data com tratamento de erro
 	const formatDate = (dateString: string) => {
 		if (!dateString) return '';
 
@@ -202,17 +214,26 @@ export default function PerfilPage() {
 	// Manipulador para o upload de foto
 	const handlePhotoUpload = useCallback(
 		(event: React.ChangeEvent<HTMLInputElement>) => {
-			const file = event.target.files?.[0];
-			if (!file) return;
+			try {
+				const file = event.target.files?.[0];
+				if (!file) return;
 
-			// Cria uma URL temporária para a imagem
-			const imageUrl = URL.createObjectURL(file);
-			setProfilePhoto(imageUrl);
+				// Cria uma URL temporária para a imagem
+				const imageUrl = URL.createObjectURL(file);
+				setProfilePhoto(imageUrl);
 
-			// Em uma implementação real, aqui você faria o upload para um servidor
-			console.log('Arquivo selecionado:', file);
+				// Em uma implementação real, aqui você faria o upload para um servidor
+				console.log('Arquivo selecionado:', file);
+			} catch (error) {
+				console.error('Erro ao processar imagem:', error);
+				toast({
+					variant: 'destructive',
+					title: 'Erro ao processar imagem',
+					description: 'Não foi possível processar a imagem selecionada.',
+				});
+			}
 		},
-		[]
+		[toast]
 	);
 
 	// Fechamento do modal de edição de foto
@@ -344,6 +365,33 @@ export default function PerfilPage() {
 		);
 	}
 
+	if (loadError) {
+		return (
+			<motion.div
+				initial={{ opacity: 0, y: 20 }}
+				animate={{ opacity: 1, y: 0 }}
+				className="flex flex-col items-center justify-center min-h-[50vh] p-8"
+			>
+				<AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+				<h1 className="text-2xl font-semibold mb-4 text-gray-800">
+					Erro ao carregar perfil
+				</h1>
+				<p className="text-gray-600 text-center max-w-md mb-6">
+					{loadError}. Por favor, recarregue a página ou tente novamente mais
+					tarde.
+				</p>
+				<Button
+					variant="outline"
+					className="flex items-center gap-2"
+					onClick={() => window.location.reload()}
+				>
+					<RefreshCcw className="h-4 w-4" />
+					Tentar novamente
+				</Button>
+			</motion.div>
+		);
+	}
+
 	if (!user) {
 		return (
 			<motion.div
@@ -455,9 +503,15 @@ export default function PerfilPage() {
 												/>
 												<Avatar className="h-40 w-40 border-4 border-white shadow-xl relative">
 													<AvatarImage
-														src={profilePhoto || clerkUser?.imageUrl}
+														src={profilePhoto || clerkUser?.imageUrl || ''}
 														alt={clerkUser?.fullName || 'Usuário'}
 														className="object-cover"
+														onError={(e) => {
+															console.error(
+																'Erro ao carregar imagem de perfil'
+															);
+															e.currentTarget.style.display = 'none';
+														}}
 													/>
 													<AvatarFallback className="bg-gradient-to-br from-brand-magenta to-brand-blue text-white text-2xl">
 														{clerkUser?.fullName
@@ -478,12 +532,12 @@ export default function PerfilPage() {
 											</div>
 
 											<div className="flex justify-center">
-											<StatusBadge status="verified" />
+												<StatusBadge status="verified" />
 											</div>
 
 											{/* Nome destacado e centralizado */}
 											<h2 className="mt-4 text-xl font-semibold bg-gradient-to-r from-brand-magenta to-brand-blue bg-clip-text text-transparent text-center">
-														{clerkUser?.fullName || 'Usuário'}
+												{clerkUser?.fullName || 'Usuário'}
 											</h2>
 
 											<p className="text-xs text-gray-500 mt-3 flex items-center justify-center gap-1">
@@ -526,11 +580,11 @@ export default function PerfilPage() {
 															<div className="bg-gradient-to-br from-white via-white to-brand-magenta/5 hover:to-brand-magenta/10 rounded-xl p-3 h-full border border-gray-100/80 shadow-sm transition-all flex flex-col items-center justify-center gap-2">
 																<div className="w-12 h-12 rounded-full bg-brand-magenta flex items-center justify-center">
 																	<ShoppingCart className="h-6 w-6 text-white" />
-													</div>
+																</div>
 																<span className="text-sm font-medium text-gray-800">
 																	Compras
 																</span>
-													</div>
+															</div>
 														</Link>
 													</motion.div>
 
@@ -548,8 +602,8 @@ export default function PerfilPage() {
 															boxShadow:
 																'0 10px 25px -5px rgba(242, 87, 151, 0.2)',
 														}}
-															whileTap={{ scale: 0.98 }}
-														>
+														whileTap={{ scale: 0.98 }}
+													>
 														<Link href="/favorites">
 															<div className="bg-gradient-to-br from-white via-white to-brand-blue/5 hover:to-brand-blue/10 rounded-xl p-3 h-full border border-gray-100/80 shadow-sm transition-all flex flex-col items-center justify-center gap-2">
 																<div className="w-12 h-12 rounded-full bg-brand-magenta flex items-center justify-center">
@@ -560,8 +614,8 @@ export default function PerfilPage() {
 																</span>
 															</div>
 														</Link>
-														</motion.div>
 													</motion.div>
+												</motion.div>
 											</div>
 										</motion.div>
 
@@ -581,7 +635,18 @@ export default function PerfilPage() {
 											</div>
 
 											<div className="flex-1 w-full flex justify-center">
-												<CustomerCategoryInfo />
+												<Suspense
+													fallback={
+														<div className="w-full flex flex-col items-center justify-center p-8 space-y-4">
+															<div className="h-6 w-24 bg-gray-200 rounded-full animate-pulse"></div>
+															<div className="h-4 w-36 bg-gray-200 rounded-full animate-pulse"></div>
+															<div className="h-16 w-full max-w-xs bg-gray-200 rounded-xl animate-pulse mt-4"></div>
+															<div className="h-12 w-full max-w-xs bg-gray-200 rounded-lg animate-pulse mt-2"></div>
+														</div>
+													}
+												>
+													<LazyCustomerCategoryInfo />
+												</Suspense>
 											</div>
 										</motion.div>
 									</motion.div>
@@ -973,9 +1038,13 @@ export default function PerfilPage() {
 						<div className="flex flex-col items-center p-4">
 							<Avatar className="h-32 w-32 border-4 border-white shadow-lg mb-6">
 								<AvatarImage
-									src={profilePhoto || clerkUser?.imageUrl}
+									src={profilePhoto || clerkUser?.imageUrl || ''}
 									alt={clerkUser?.fullName || 'Usuário'}
 									className="object-cover"
+									onError={(e) => {
+										console.error('Erro ao carregar imagem de perfil no modal');
+										e.currentTarget.style.display = 'none';
+									}}
 								/>
 								<AvatarFallback className="bg-gradient-to-br from-brand-magenta to-brand-blue text-white text-3xl">
 									{clerkUser?.fullName
