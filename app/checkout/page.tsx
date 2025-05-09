@@ -42,6 +42,7 @@ import {
 	DollarSign,
 	ShieldAlert,
 	Store,
+	RefreshCcw,
 } from 'lucide-react';
 import { useCart } from '../../lib/contexts/cart-context';
 import { CartItem } from '../../components/checkout/cart-item';
@@ -62,6 +63,15 @@ import {
 import Image from 'next/image';
 import { CepAutocomplete } from '../../components/checkout/cep-autocomplete';
 import { useCustomer } from '../../hooks/use-customer';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '../../components/ui/dialog';
+import { useAuth } from '../../lib/contexts/auth-context';
 
 export default function CheckoutPage() {
 	const router = useRouter();
@@ -108,6 +118,11 @@ export default function CheckoutPage() {
 
 	// Adicionar um novo estado para controlar se o usuário concordou com os termos
 	const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+	// Novo estado para o diálogo de reautenticação
+	const [openReauthDialog, setOpenReauthDialog] = useState(false);
+	const [isReauthenticating, setIsReauthenticating] = useState(false);
+	const { forceRefresh, getApiToken, isAuthenticated, user } = useAuth();
 
 	// Formatação e validação de telefone
 	const formatPhone = (value: string) => {
@@ -272,6 +287,94 @@ export default function CheckoutPage() {
 		);
 	};
 
+	// Função para salvar pedido temporariamente
+	const saveOrderDataToLocalStorage = (orderData: any) => {
+		try {
+			localStorage.setItem('tempOrderData', JSON.stringify(orderData));
+			console.log('[Checkout] Dados do pedido salvos temporariamente');
+			return true;
+		} catch (error) {
+			console.error('[Checkout] Erro ao salvar dados do pedido:', error);
+			return false;
+		}
+	};
+
+	// Função para recuperar pedido temporário
+	const getStoredOrderData = () => {
+		try {
+			const data = localStorage.getItem('tempOrderData');
+			if (data) {
+				return JSON.parse(data);
+			}
+			return null;
+		} catch (error) {
+			console.error('[Checkout] Erro ao recuperar dados do pedido:', error);
+			return null;
+		}
+	};
+
+	// Função para limpar pedido temporário
+	const clearStoredOrderData = () => {
+		localStorage.removeItem('tempOrderData');
+	};
+
+	// Nova função para tentar reautenticar o usuário
+	const handleRetryAuthentication = async () => {
+		try {
+			setIsReauthenticating(true);
+
+			// Primeiro tenta forçar um refresh do token
+			await forceRefresh();
+
+			// Verifica se conseguimos obter o token após o refresh
+			const token = await getApiToken();
+
+			if (token && user?.id) {
+				console.log(
+					'[Checkout] Reautenticação bem-sucedida, continuando pedido...'
+				);
+				setOpenReauthDialog(false);
+
+				// Recupera os dados armazenados se existirem
+				const storedData = getStoredOrderData();
+
+				// Se temos dados armazenados, tenta reenviar o pedido
+				if (storedData) {
+					// Atualiza o clerkId nos dados armazenados
+					storedData.clerkId = user.id;
+
+					// Reenvia o pedido
+					await submitOrder(storedData);
+					clearStoredOrderData();
+				} else {
+					// Se não temos dados armazenados, mostra toast de sucesso
+					toast({
+						title: 'Autenticação restaurada',
+						description:
+							'Sessão revalidada. Tente finalizar seu pedido novamente.',
+						variant: 'default',
+					});
+				}
+			} else {
+				throw new Error('Não foi possível recuperar a sessão');
+			}
+		} catch (error) {
+			console.error('[Checkout] Erro ao reautenticar:', error);
+			toast({
+				title: 'Falha na reautenticação',
+				description: 'Por favor, recarregue a página para tentar novamente.',
+				variant: 'destructive',
+			});
+		} finally {
+			setIsReauthenticating(false);
+		}
+	};
+
+	// Nova função para recarregar a página
+	const handleReloadPage = () => {
+		window.location.reload();
+	};
+
 	// Modificar a função handleSubmit para separar a validação da finalização
 	const handleValidateOrder = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -291,41 +394,9 @@ export default function CheckoutPage() {
 		setIsConfirmationOpen(true);
 	};
 
-	const handleSubmitOrder = async () => {
-		setIsSubmitting(true);
-
+	// Função auxiliar para enviar o pedido (extraída da handleSubmitOrder)
+	const submitOrder = async (orderData: any) => {
 		try {
-			// Obter o saldo do voucher e calcular quanto vai ser usado
-			const voucherBalance = getAvailableBalance();
-			const voucherUsed = Math.min(voucherBalance, totalPrice);
-			const finalTotal = Math.max(0, totalPrice - voucherUsed);
-
-			// Preparar dados do pedido para enviar à API
-			const orderData = {
-				clerkId: customer?.externalId, // ID do Clerk para buscar dados completos do cliente
-				name,
-				phone,
-				delivery: {
-					zipCode,
-					street,
-					number,
-					complement: complement || 'Não informado',
-					neighborhood,
-					city,
-					state,
-					country: country || 'Brasil',
-				},
-				observations: observations || 'Nenhuma observação',
-				items: cartItems,
-				payment: {
-					subtotal: totalPrice,
-					voucherUsed,
-					finalTotal,
-					remainingVoucher: Math.max(0, voucherBalance - voucherUsed),
-				},
-				timestamp: new Date().toISOString(),
-			};
-
 			console.log('Enviando pedido para processamento...');
 
 			// Enviar pedido para a API interna
@@ -348,6 +419,20 @@ export default function CheckoutPage() {
 
 			if (!response.ok) {
 				console.error('Erro no processamento do pedido:', responseData);
+
+				// Verificar especificamente o erro de clerkId
+				if (responseData.error === 'ID do Clerk não fornecido') {
+					console.log(
+						'[Checkout] Erro de ID do Clerk não fornecido, tentando reautenticar...'
+					);
+
+					// Salva os dados do pedido temporariamente
+					saveOrderDataToLocalStorage(orderData);
+
+					// Abrir diálogo de reautenticação
+					setOpenReauthDialog(true);
+					return null;
+				}
 
 				// Identificar o tipo de erro para exibir a mensagem apropriada
 				if (responseData.error === 'Limite de pedidos atingido') {
@@ -388,7 +473,7 @@ export default function CheckoutPage() {
 					setOpenErrorDialog(true);
 				}
 
-				return;
+				return null;
 			}
 
 			// Pedido processado com sucesso
@@ -408,6 +493,7 @@ export default function CheckoutPage() {
 
 			clearCart();
 			router.push('/confirmation');
+			return responseData;
 		} catch (error) {
 			console.error('Erro ao processar pedido:', error);
 
@@ -420,6 +506,65 @@ export default function CheckoutPage() {
 				type: 'general',
 			});
 			setOpenErrorDialog(true);
+			return null;
+		}
+	};
+
+	// Modificar a função handleSubmitOrder para usar a nova função submitOrder
+	const handleSubmitOrder = async () => {
+		setIsSubmitting(true);
+
+		try {
+			// Obter o saldo do voucher e calcular quanto vai ser usado
+			const voucherBalance = getAvailableBalance();
+			const voucherUsed = Math.min(voucherBalance, totalPrice);
+			const finalTotal = Math.max(0, totalPrice - voucherUsed);
+
+			// Verificar se o usuário está autenticado
+			if (!isAuthenticated || !user?.id) {
+				console.warn('[Checkout] Usuário não autenticado ou clerkId ausente');
+
+				// Exibir modal de reautenticação
+				setOpenReauthDialog(true);
+				return;
+			}
+
+			// Preparar dados do pedido para enviar à API
+			const orderData = {
+				clerkId: user?.id, // ID do Clerk para buscar dados completos do cliente
+				name,
+				phone,
+				delivery: {
+					zipCode,
+					street,
+					number,
+					complement: complement || 'Não informado',
+					neighborhood,
+					city,
+					state,
+					country: country || 'Brasil',
+				},
+				observations: observations || 'Nenhuma observação',
+				items: cartItems,
+				payment: {
+					subtotal: totalPrice,
+					voucherUsed,
+					finalTotal,
+					remainingVoucher: Math.max(0, voucherBalance - voucherUsed),
+				},
+				timestamp: new Date().toISOString(),
+			};
+
+			// Verificação extra de segurança do clerkId
+			if (!orderData.clerkId) {
+				console.error('[Checkout] ERRO: clerkId ausente após verificação!');
+				saveOrderDataToLocalStorage(orderData);
+				setOpenReauthDialog(true);
+				return;
+			}
+
+			// Tentar enviar o pedido com a nova função
+			await submitOrder(orderData);
 		} finally {
 			setIsSubmitting(false);
 			setIsConfirmationOpen(false);
@@ -1363,6 +1508,82 @@ export default function CheckoutPage() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+
+			{/* Adicionar o novo diálogo de reautenticação */}
+			<Dialog open={openReauthDialog} onOpenChange={setOpenReauthDialog}>
+				<DialogContent className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle className="text-lg text-center flex flex-col items-center gap-2">
+							<div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+								<AlertCircle className="h-6 w-6 text-amber-600" />
+							</div>
+							<span className="text-xl bg-gradient-to-r from-brand-magenta to-brand-orange bg-clip-text text-transparent mt-2">
+								Precisamos revalidar sua sessão
+							</span>
+						</DialogTitle>
+						<DialogDescription className="text-center pt-2">
+							Sua sessão de usuário expirou ou não foi encontrada. Precisamos
+							revalida-la para finalizar seu pedido.
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="bg-amber-50 p-4 rounded-lg border border-amber-200 my-4">
+						<p className="text-sm text-amber-800 flex items-start gap-2">
+							<AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+							<span>
+								Não se preocupe, seu carrinho está salvo e você poderá finalizar
+								o pedido após a revalidação.
+							</span>
+						</p>
+					</div>
+
+					<DialogFooter className="flex-col gap-3 sm:gap-2">
+						<Button
+							onClick={handleRetryAuthentication}
+							className="w-full bg-gradient-to-r from-brand-magenta to-brand-orange text-white hover:opacity-90"
+							disabled={isReauthenticating}
+						>
+							{isReauthenticating ? (
+								<>
+									<svg
+										className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+									>
+										<circle
+											className="opacity-25"
+											cx="12"
+											cy="12"
+											r="10"
+											stroke="currentColor"
+											strokeWidth="4"
+										></circle>
+										<path
+											className="opacity-75"
+											fill="currentColor"
+											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+										></path>
+									</svg>
+									Revalidando sessão...
+								</>
+							) : (
+								<>
+									<RefreshCcw className="mr-2 h-4 w-4" />
+									Revalidar sessão agora
+								</>
+							)}
+						</Button>
+						<Button
+							variant="outline"
+							onClick={handleReloadPage}
+							className="w-full border-gray-200"
+						>
+							Recarregar página
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</StoreLayout>
 	);
 }
