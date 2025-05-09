@@ -200,7 +200,9 @@ export default function CustomerCategoryInfo() {
 						</div>
 
 						<div className="text-3xl font-bold bg-gradient-to-r from-brand-magenta to-brand-blue bg-clip-text text-transparent">
-							{formatter.format(availableBalance || 0)}
+							{typeof availableBalance === 'string' 
+                             ? availableBalance 
+                             : formatter.format(availableBalance || 0)}
 						</div>
 
 						<div className="mt-2 text-xs text-brand-blue/70 flex flex-col gap-1">

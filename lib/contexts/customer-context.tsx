@@ -17,7 +17,7 @@ interface CustomerContextProps {
 	isLoading: boolean;
 	error: Error | null;
 	refreshCustomer: () => Promise<Customer | null>;
-	getAvailableBalance: () => number;
+	getAvailableBalance: () => number | string;
 	orderLimits: CustomerOrderLimits | null;
 	isLoadingLimits: boolean;
 	limitsError: string | null;
@@ -102,7 +102,12 @@ export function CustomerProvider({ children }: { children: ReactNode }) {
 	/**
 	 * Obtém o saldo disponível do cliente baseado no valor do ticket e frequência
 	 */
-	const getAvailableBalance = (): number => {
+	const getAvailableBalance = (): number | string => {
+		// Se o cliente tem ticket customizado, retornar "Ilimitado"
+		if (customer?.__category__?.isCustomTicket) {
+			return "Ilimitado";
+		}
+
 		// Se temos os limites e valor do ticket, usar o saldo remaining
 		if (orderLimits?.limits?.ticketValue?.remaining !== undefined) {
 			return orderLimits.limits.ticketValue.remaining;
@@ -114,7 +119,7 @@ export function CustomerProvider({ children }: { children: ReactNode }) {
 		}
 
 		const { ticketValue } = customer.__category__;
-		return parseFloat(ticketValue);
+		return parseFloat(String(ticketValue) || '0');
 	};
 
 	// Função para buscar limites de pedidos do cliente
