@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StoreLayout from '../../components/layouts/store-layout';
 import { Button } from '../../components/ui/button';
@@ -318,6 +318,82 @@ export default function CheckoutPage() {
 		localStorage.removeItem('tempOrderData');
 	};
 
+	// Função para salvar o formulário no localStorage
+	const saveFormToLocalStorage = () => {
+		const formData = {
+			name,
+			phone,
+			zipCode,
+			street,
+			number,
+			complement,
+			neighborhood,
+			city,
+			state,
+			country,
+			observations,
+			showObservations,
+		};
+
+		try {
+			localStorage.setItem('checkout_form_data', JSON.stringify(formData));
+			console.log('[Checkout] Dados do formulário salvos temporariamente');
+		} catch (error) {
+			console.error('[Checkout] Erro ao salvar dados do formulário:', error);
+		}
+	};
+
+	// Função para carregar o formulário do localStorage
+	const loadFormFromLocalStorage = () => {
+		try {
+			const savedData = localStorage.getItem('checkout_form_data');
+			if (savedData) {
+				const formData = JSON.parse(savedData);
+				console.log(
+					'[Checkout] Dados do formulário recuperados do localStorage'
+				);
+
+				// Preencher os estados com os dados salvos
+				setName(formData.name || '');
+				setPhone(formData.phone || '');
+				setZipCode(formData.zipCode || '');
+				setStreet(formData.street || '');
+				setNumber(formData.number || '');
+				setComplement(formData.complement || '');
+				setNeighborhood(formData.neighborhood || '');
+				setCity(formData.city || '');
+				setState(formData.state || '');
+				setCountry(formData.country || 'Brasil');
+				setObservations(formData.observations || '');
+				setShowObservations(formData.showObservations || false);
+
+				// Limpar erros possíveis
+				setNameError('');
+				setPhoneError('');
+				setZipCodeError('');
+				setStreetError('');
+				setNumberError('');
+				setNeighborhoodError('');
+				setCityError('');
+				setStateError('');
+
+				return true;
+			}
+			return false;
+		} catch (error) {
+			console.error('[Checkout] Erro ao carregar dados do formulário:', error);
+			return false;
+		}
+	};
+
+	// Carregar dados do formulário quando o componente montar
+	useEffect(() => {
+		// Carregar dados do formulário apenas se houver itens no carrinho
+		if (totalItems > 0) {
+			loadFormFromLocalStorage();
+		}
+	}, [totalItems]);
+
 	// Nova função para tentar reautenticar o usuário
 	const handleRetryAuthentication = async () => {
 		try {
@@ -420,6 +496,9 @@ export default function CheckoutPage() {
 			if (!response.ok) {
 				console.error('Erro no processamento do pedido:', responseData);
 
+				// Salvar o formulário antes de mostrar o diálogo de erro
+				saveFormToLocalStorage();
+
 				// Verificar especificamente o erro de clerkId
 				if (responseData.error === 'ID do Clerk não fornecido') {
 					console.log(
@@ -496,6 +575,9 @@ export default function CheckoutPage() {
 			return responseData;
 		} catch (error) {
 			console.error('Erro ao processar pedido:', error);
+
+			// Salvar o formulário antes de mostrar o diálogo de erro
+			saveFormToLocalStorage();
 
 			setErrorDetails({
 				title: 'Erro ao Processar Pedido',
@@ -1390,7 +1472,16 @@ export default function CheckoutPage() {
 			</div>
 
 			{/* Diálogo de Erro */}
-			<AlertDialog open={openErrorDialog} onOpenChange={setOpenErrorDialog}>
+			<AlertDialog
+				open={openErrorDialog}
+				onOpenChange={(open) => {
+					// Se o diálogo está fechando, salvar o formulário novamente para garantir que temos os dados mais recentes
+					if (!open) {
+						saveFormToLocalStorage();
+					}
+					setOpenErrorDialog(open);
+				}}
+			>
 				<AlertDialogContent className="max-w-lg">
 					<AlertDialogHeader>
 						<AlertDialogTitle
