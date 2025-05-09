@@ -599,8 +599,8 @@ export default function CheckoutPage() {
 		try {
 			// Obter o saldo do voucher e calcular quanto vai ser usado
 			const voucherBalance = getAvailableBalance();
-			const voucherUsed = Math.min(voucherBalance, totalPrice);
-			const finalTotal = Math.max(0, totalPrice - voucherUsed);
+			const voucherUsed = Math.min(Number(voucherBalance), Number(totalPrice));
+			const finalTotal = Math.max(0, Number(totalPrice) - voucherUsed);
 
 			// Verificar se o usuário está autenticado
 			if (!isAuthenticated || !user?.id) {
@@ -632,7 +632,7 @@ export default function CheckoutPage() {
 					subtotal: totalPrice,
 					voucherUsed,
 					finalTotal,
-					remainingVoucher: Math.max(0, voucherBalance - voucherUsed),
+					remainingVoucher: Math.max(0, Number(voucherBalance) - voucherUsed),
 				},
 				timestamp: new Date().toISOString(),
 			};
@@ -1330,7 +1330,7 @@ export default function CheckoutPage() {
 													<span>{formatCurrency(totalPrice)}</span>
 												</div>
 
-												{getAvailableBalance() > 0 && (
+												{Number(getAvailableBalance()) > 0 && (
 													<div className="flex justify-between items-center text-sm mt-1">
 														<span className="text-green-600">
 															Voucher aplicado:
@@ -1338,7 +1338,10 @@ export default function CheckoutPage() {
 														<span className="text-green-600">
 															-{' '}
 															{formatCurrency(
-																Math.min(getAvailableBalance(), totalPrice)
+																Math.min(
+																	Number(getAvailableBalance()),
+																	Number(totalPrice)
+																)
 															)}
 														</span>
 													</div>
