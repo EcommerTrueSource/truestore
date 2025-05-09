@@ -105,7 +105,7 @@ export default function CustomerCategoryInfo() {
 		);
 	}
 
-	const { name, description, ticketValue, frequencyPerMonth } =
+	const { name, description, ticketValue, frequencyPerMonth, isCustomTicket } =
 		customer.__category__;
 	const availableBalance = getAvailableBalance();
 
@@ -207,9 +207,12 @@ export default function CustomerCategoryInfo() {
 							<div className="flex items-center gap-1">
 								<Calendar className="h-3 w-3 text-brand-blue/70" />
 								Renovação a cada{' '}
-								{frequencyPerMonth === 1
-									? 'mês'
-									: `${frequencyPerMonth || '-'} meses`}
+								{(typeof frequencyPerMonth === 'number' && frequencyPerMonth === -1) || 
+                                 (typeof frequencyPerMonth === 'string' && frequencyPerMonth === "Ilimitado")
+									? 'Ilimitado'
+									: frequencyPerMonth === 1
+										? 'mês'
+										: `${frequencyPerMonth || '-'} meses`}
 							</div>
 							{nextRenewalDate && (
 								<div className="flex items-center gap-1">
@@ -228,7 +231,13 @@ export default function CustomerCategoryInfo() {
 								Valor do Voucher
 							</div>
 							<div className="font-semibold text-brand-blue/90 text-center">
-								{formatter.format(parseFloat(ticketValue || '0'))}
+								{isCustomTicket 
+									? "Customizado"
+									: (typeof ticketValue === 'string' && ticketValue === "0.00") || 
+                                      (typeof ticketValue === 'number' && ticketValue === 0) || 
+                                      !ticketValue
+										? "-"
+										: formatter.format(parseFloat(String(ticketValue) || '0'))}
 							</div>
 						</div>
 					</div>
