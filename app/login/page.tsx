@@ -233,13 +233,33 @@ export default function LoginPage() {
 							// Verificar o estado de autenticação atual antes de redirecionar
 							// Se já tivermos sido redirecionados pelo efeito de autenticação, não faça nada
 							if (!isAuthenticated) {
-								console.log(
-									'Redirecionando para a loja após login bem-sucedido'
-								);
-								// Adicionar um pequeno atraso antes de redirecionar para garantir
-								// que todos os contextos foram atualizados
+								console.log('Redirecionando após login bem-sucedido');
+
+								// Verificar se há uma rota salva em cookie
+								const getCookie = (name: string) => {
+									const value = `; ${document.cookie}`;
+									const parts = value.split(`; ${name}=`);
+									if (parts.length === 2)
+										return parts.pop()?.split(';').shift();
+									return null;
+								};
+
+								// Adicionar um pequeno atraso para garantir que todos os contextos foram atualizados
 								setTimeout(() => {
-									router.push('/store');
+									// Verificar se há uma rota salva para redirecionamento
+									const lastRoute = getCookie('lastRoute');
+
+									if (lastRoute) {
+										console.log(
+											`[LOGIN] Redirecionando para rota salva: ${lastRoute}`
+										);
+										router.push(lastRoute);
+									} else {
+										console.log(
+											'[LOGIN] Nenhuma rota salva, redirecionando para /store'
+										);
+										router.push('/store');
+									}
 								}, 500);
 							} else {
 								console.log(
